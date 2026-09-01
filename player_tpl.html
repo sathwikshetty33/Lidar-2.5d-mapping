@@ -206,7 +206,7 @@ function fit(){
   let ax=1e9,bx=-1e9,ay=1e9,by=-1e9;
   for (const t of T){
     for (let j = 0; j < t.ny; j += 3) for (let i = 0; i < t.nx; i += 3){
-      if (!(t.flag[j*t.nx+i] & 4)) continue;
+      if (!(t.flag[j*t.nx+i] & (srf.src === 'zgnd' ? 4 : 5))) continue;
       const X = t.x0+i*t.res, Y = t.y0+j*t.res;
       const a = X*B.ux+Y*B.uy;
       const b0 = X*B.vx+Y*B.vy+t.zgnd[j*t.nx+i]*.001*B.vz;
@@ -258,7 +258,7 @@ function draw(){
           const X = Tt.x0 + (i+k*.5)*Tt.res;
           const r = Math.hypot(X,Y);
           if (r < rin || r >= rout) continue;
-          if (!(Tt.flag[j*nx+i] & 4)) continue;
+          if (!(Tt.flag[j*nx+i] & (srf.src === 'zgnd' ? 4 : 5))) continue;
           const a = X*ux+Y*uy+X0, b = X*vx+Y*vy+A[j*nx+i]*.001*vz+Y0;
           if (a<L0||a>L1||b<T0||b>T1) continue;
           if (qn >= QMAX) break;

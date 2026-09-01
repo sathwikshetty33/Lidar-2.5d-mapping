@@ -63,6 +63,16 @@ const qk = new Int32Array(QMAX), qd = new Float32Array(QMAX),
 const KS = new Int32Array(4);
 
 const frameOf = f => S.data.get(f);
+
+/* Which nodes may be drawn.
+   bit 0 = a real cell sits here   bit 2 = the terrain raster was measured nearby
+   For the GROUND surface only bit 2 counts: drawing terrain we never measured
+   would be inventing it. But the TOP surface is different -- a node with real
+   returns must be drawn even where no ground return is nearby, which is
+   exactly the case on top of a building or wall. Testing bit 2 for both was
+   culling 9.7% of observed nodes, and they were the tall ones: the tops of
+   things were missing while their sides survived. */
+const drawable = (flag, src) => src === 'zgnd' ? (flag & 4) : (flag & 5);
 function tiersOf(f){
   const d = frameOf(f);
   if (!d) return null;
@@ -84,7 +94,7 @@ function fit(){
   const B = basis(1);
   let ax=1e9,bx=-1e9,ay=1e9,by=-1e9;
   for (const t of T) for (let j=0;j<t.ny;j+=3) for (let i=0;i<t.nx;i+=3){
-    if (!(t.flag[j*t.nx+i] & 4)) continue;
+    if (!drawable(t.flag[j*t.nx+i], S.src)) continue;
     const X=t.x0+i*t.res, Y=t.y0+j*t.res;
     const a=X*B.ux+Y*B.uy;
     const b0=X*B.vx+Y*B.vy+t.zgnd[j*t.nx+i]*.001*B.vz;
@@ -165,7 +175,7 @@ function draw(){
           const X = Tt.x0+(i+k*.5)*Tt.res;
           const rr = Math.hypot(X,Y);
           if (rr<rin || rr>=rout) continue;
-          if (!(Tt.flag[j*nx+i] & 4)) continue;
+          if (!drawable(Tt.flag[j*nx+i], S.src)) continue;
           const a=X*ux+Y*uy+X0, b=X*vx+Y*vy+A[j*nx+i]*.001*vz+Y0;
           if (a<L0||a>L1||b<T0||b>T1) continue;
           if (qn>=QMAX) break;
