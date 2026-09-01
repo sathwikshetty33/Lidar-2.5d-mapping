@@ -35,6 +35,7 @@ class JobSpec(BaseModel):
     stride: int = 1
     source: str = 'model'         # model | truth
     seed: int = 0
+    camera: bool = True           # also pull the matching camera frame
 
 
 def _run(job_id: str):
@@ -43,6 +44,11 @@ def _run(job_id: str):
     # labels and converts whatever has landed. fetching dominates a cold run
     # (~38 s a frame) and it is pure I/O, so overlapping it is nearly free.
     want_truth = job['source'] == 'truth'
+    # photos are pulled on a separate, lower-priority lane so a slow image
+    # never delays the map it belongs to
+    if job['camera']:
+        for f in job['frames']:
+            job['cam_pool'].submit(P.prefetch_image, job['seq'], f)
     pool = ThreadPoolExecutor(max_workers=3, thread_name_prefix='fetch')
     futs = {f: pool.submit(P.prefetch, job['seq'], f, want_truth)
             for f in job['frames']}
@@ -65,6 +71,7 @@ def _run(job_id: str):
             ev = dict(type='error', index=i, frame=fid, error=str(e))
         job['events'].put(ev)
     pool.shutdown(wait=False, cancel_futures=True)
+    job['cam_pool'].shutdown(wait=False, cancel_futures=True)
     job['state'] = 'cancelled' if job['cancel'] else 'done'
     job['events'].put(dict(type='end', state=job['state'],
                            errors=len(job['errors'])))
@@ -89,8 +96,10 @@ def create(spec: JobSpec):
         raise HTTPException(400, 'that range contains no frames')
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = dict(id=jid, seq=spec.seq, source=spec.source, frames=frames,
-                     done={}, order=[], errors=[], events=queue.Queue(),
-                     state='running', cancel=False, spec=spec.model_dump())
+                     camera=spec.camera, done={}, order=[], errors=[],
+                     events=queue.Queue(), state='running', cancel=False,
+                     cam_pool=ThreadPoolExecutor(max_workers=2, thread_name_prefix='cam'),
+                     spec=spec.model_dump())
     threading.Thread(target=_run, args=(jid,), daemon=True).start()
     return {'id': jid, 'frames': frames, 'state': 'running'}
 
@@ -146,6 +155,19 @@ def frame(jid: str, fid: str):
     if out is None:
         raise HTTPException(404, 'frame not ready')
     return out
+
+
+@app.get('/api/jobs/{jid}/image/{fid}')
+def image(jid: str, fid: str):
+    j = JOBS.get(jid)
+    if not j:
+        raise HTTPException(404, 'no such job')
+    try:
+        p = P.image(j['seq'], fid)
+    except Exception as e:
+        raise HTTPException(404, f'no camera frame: {e}')
+    return FileResponse(p, media_type='image/png',
+                        headers={'Cache-Control': 'public, max-age=86400'})
 
 
 @app.get('/api/health')

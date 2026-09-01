@@ -432,6 +432,12 @@ contribution. Say so explicitly in the presentation.
     `sequential` (consecutive sweeps, real motion) or `random` (scattered);
     source is `model` or `truth`.
   - `GET /api/jobs/{id}/events` — SSE, one event per finished frame.
+  - `GET /api/jobs/{id}/image/{frame}` — the matching camera photo, range-read
+    out of `data_odometry_color.zip` the same way. Forward-facing ~90 degrees
+    against the map's 360, so it is context beside the map, never an overlay.
+    Fetched on its own lower-priority lane so a slow photo never delays a map.
+    First one costs ~50 s (that archive's index is 87,215 entries), then ~5 s
+    each. Frame 00/000000 has the moving motorcyclist visible in it.
   - The UI state is in the query string, so a run is a shareable link:
     `?seq=00&mode=sequential&count=8&auto=1`.
   - **Fetching dominates a cold run** — ~40 s a frame, because each one is

@@ -106,3 +106,11 @@ canvas#view{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
   font-family:"IBM Plex Mono",monospace}
 @media (max-width:900px){.body{grid-template-columns:1fr;grid-template-rows:auto 1fr}
   aside{max-height:42vh;border-right:0;border-bottom:1px solid var(--line)}}
+
+/* the camera frame that goes with the sweep */
+.cam{left:14px;top:48px;margin:0;padding:6px;width:min(38vw,470px)}
+.cam img{display:block;width:100%;border-radius:2px;background:var(--bg);
+  aspect-ratio:1241/376}
+.cam figcaption{font-size:10px;color:var(--ink3);line-height:1.4;padding:5px 2px 1px}
+.cam.pending img{opacity:.25}
+@media (max-width:900px){.cam{display:none}}

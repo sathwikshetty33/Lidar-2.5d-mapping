@@ -52,7 +52,7 @@ const pal = () => { if (!SP){ SP = shades(SPECTRAL); CL = shades(CLASSC);
 /* ------------------------------------------------------------------ state */
 const S = {
   job:null, frames:[], data:new Map(), cur:-1, playing:false, spf:600, last:0,
-  src:'ztop', paint:'height', mesh:true, rings:true,
+  src:'ztop', paint:'height', mesh:true, rings:true, camera:true,
   ob:{az:3.90, el:.40, S:14, px0:0, py0:0, vex:2}, drag:null, es:null,
 };
 const cv = $('view'), ctx = cv.getContext('2d');
@@ -270,6 +270,7 @@ function show(i){
   $('fnum').textContent = `${S.cur+1} / ${S.frames.length}`;
   [...$('strip').children].forEach((b,n)=>b.classList.toggle('cur', n===S.cur));
   if (frameOf(f)){ info(); redraw(); }
+  photo();
 }
 function tick(t){
   if (!S.playing) return;
@@ -315,8 +316,24 @@ function setVex(v){
 $('toggles').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   S[b.dataset.v] = !S[b.dataset.v];
-  b.setAttribute('aria-pressed', String(S[b.dataset.v])); redraw();
+  b.setAttribute('aria-pressed', String(S[b.dataset.v]));
+  if (b.dataset.v === 'camera') photo(); else redraw();
 });
+
+/* the camera frame for whatever is on screen. it arrives on its own schedule
+   -- the map never waits for it, and a frame with no photo just has none. */
+function photo(){
+  const box = $('cam'), img = $('camimg');
+  if (!S.camera || !S.job || S.cur < 0){ box.hidden = true; return; }
+  const f = S.frames[S.cur];
+  const url = `/api/jobs/${S.job}/image/${f}`;
+  if (img.dataset.f === f){ box.hidden = false; return; }
+  img.dataset.f = f;
+  box.hidden = false; box.classList.add('pending');
+  img.onload = () => { if (img.dataset.f === f) box.classList.remove('pending'); };
+  img.onerror = () => { if (img.dataset.f === f) box.hidden = true; };
+  img.src = url;
+}
 
 /* -------------------------------------------------------------- camera */
 cv.addEventListener('pointerdown', e => {
@@ -366,11 +383,13 @@ async function run(){
   S.data.clear(); S.frames=[]; S.cur=-1; S.playing=false;
   $('play').textContent='Play'; $('err').textContent=''; $('empty').style.display='';
   $('tagL').hidden = $('tagB').hidden = true;
+  $('cam').hidden = true; $('camimg').dataset.f = '';
   const spec = {
     seq: $('seq').value,
     mode: document.querySelector('#mode [aria-pressed=true]').dataset.v,
     start: +$('start').value, count: +$('count').value,
     stride: +$('stride').value, source: $('source').value, seed: +$('seed').value,
+    camera: S.camera,
   };
   $('go').disabled = true; $('stop').hidden = false;
   setState('starting', 'run');

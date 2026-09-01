@@ -96,8 +96,15 @@
         <div class="seg" id="toggles">
           <button data-v="mesh" aria-pressed="true">mesh</button>
           <button data-v="rings" aria-pressed="true">rings</button>
+          <button data-v="camera" aria-pressed="true">photo</button>
         </div>
       </div>
+
+      <figure class="float cam" id="cam" hidden>
+        <img id="camimg" alt="the scene this sweep was taken in">
+        <figcaption>left colour camera &mdash; forward only, about 90&deg;.
+          The map is the full 360&deg;, so this is roughly one quadrant of it.</figcaption>
+      </figure>
 
       <div class="float transport" id="transport" hidden>
         <button id="prev">&#9664;</button>

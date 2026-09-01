@@ -29,6 +29,11 @@ RAW.mkdir(parents=True, exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=True)
 
 SURF_MULT = 4          # surface base 20/40/80/160 cm, keeps a frame ~400 KB
+
+# the left colour camera that rode along with the laser. it is FORWARD ONLY,
+# about 90 degrees wide, while the map is the full 360 -- so the photo shows
+# roughly the top-right quadrant of the map, not all of it.
+CAM = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_color.zip'
 _model_lock = threading.Lock()
 _model = None
 # a pool rather than one shared handle: ZipFile is not thread safe, and
@@ -122,6 +127,28 @@ def cell_provenance(m, x, y, prov):
     for critical in (2, 3, 4):                 # car, pedestrian, cyclist
         out[h[:, critical] > 0] = critical
     return out
+
+
+def image(seq: str, frame: str):
+    """
+    the camera frame that goes with this sweep, pulled the same way as the
+    scan. cheaper than the scan (~850 KB, ~5 s) but the first call pays a
+    one-off ~50 s to read that archive's 87k-entry directory.
+    """
+    p = RAW / f'{seq}_{frame}_cam.png'
+    if p.exists() and p.stat().st_size:
+        return p
+    with _borrow(CAM) as z:
+        data = z.read(f'dataset/sequences/{seq}/image_2/{frame}.png')
+    p.write_bytes(data)
+    return p
+
+
+def prefetch_image(seq: str, frame: str):
+    try:
+        image(seq, frame)
+    except Exception:
+        pass          # no photo is not an error; the map stands on its own
 
 
 def prefetch(seq: str, frame: str, want_truth: bool):

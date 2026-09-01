@@ -692,6 +692,33 @@ downloads run at once: four cold frames take about 50 seconds instead of 150.
 The files on disk under `cache/` are a cache, not an input. Delete them and the
 pipeline refills them.
 
+### The photograph of the scene
+
+KITTI recorded a forward-facing camera alongside the laser, and those pictures
+live in another archive on the same server. The same trick pulls one out — a
+photo is about 850 KB against 2 MB for a scan, so it is quicker.
+
+The picture appears beside the map, for the frame you are looking at. Two things
+to be clear about:
+
+- **The camera looks forward only, roughly 90 degrees wide. The map is the full
+  360.** So the photo shows about one quadrant of what the map covers, not all
+  of it. The caption on the panel says so.
+- The camera and the laser sit in different places on the roof, so the two do
+  not line up pixel for pixel. It is context, not an overlay.
+
+It is fetched on a **separate, slower lane** from the scans, so a slow photo
+never holds up the map it belongs to. If a picture fails to arrive the map is
+unaffected and the panel simply stays hidden.
+
+Cost: the first picture in a session pays a one-off ~50 seconds to read that
+archive's index (87,215 entries), then about 5 seconds each. Cached ones are
+instant.
+
+Worth looking at frame 0 of sequence 00 with the picture on: there is a
+motorcyclist in the middle of the road. That is the 88 "moving" points the
+ground truth marks, and the ones the detector misses entirely.
+
 ---
 
 ## 15. What this honestly does not do
