@@ -53,7 +53,7 @@ const pal = () => { if (!SP){ SP = shades(SPECTRAL); CL = shades(CLASSC);
 const S = {
   job:null, frames:[], data:new Map(), cur:-1, playing:false, spf:600, last:0,
   src:'ztop', paint:'height', mesh:true, rings:true, camera:true, proj:true,
-  ob:{az:3.90, el:.40, S:14, px0:0, py0:0, vex:2}, drag:null, es:null,
+  ob:{az:3.90, el:.40, S:14, px0:0, py0:0, vex:2}, drag:null, es:null, touched:false,
 };
 const cv = $('view'), ctx = cv.getContext('2d');
 let W = 0, H = 0, dpr = 1;
@@ -96,6 +96,7 @@ function fit(){
   S.ob.S = Math.min(W*.9/(bx-ax||1), H*.9/(by-ay||1));
   S.ob.px0 = W/2 - (ax+bx)/2*S.ob.S;
   S.ob.py0 = H/2 - (ay+by)/2*S.ob.S;
+  S.touched = false;
 }
 function draw(){
   pal();
@@ -315,9 +316,11 @@ $('play').onclick = () => {
 $('prev').onclick = () => { S.playing=false; $('play').textContent='Play'; show(S.cur-1); };
 $('next').onclick = () => { S.playing=false; $('play').textContent='Play'; show(S.cur+1); };
 $('scrub').oninput = e => { S.playing=false; $('play').textContent='Play'; show(+e.target.value); };
+$('fitbtn').onclick = () => { fit(); redraw(); };
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
-  if (e.key === ' '){ e.preventDefault(); $('play').click(); }
+  if (e.key === 'f' || e.key === 'F'){ fit(); redraw(); }
+  else if (e.key === ' '){ e.preventDefault(); $('play').click(); }
   else if (e.key === 'ArrowLeft') $('prev').click();
   else if (e.key === 'ArrowRight') $('next').click();
 });
@@ -411,6 +414,7 @@ cv.addEventListener('pointermove', e => {
   if (e.shiftKey){ S.ob.px0=S.drag.ox+dx; S.ob.py0=S.drag.oy+dy; }
   else { S.ob.az=S.drag.az-dx*.006;
          S.ob.el=Math.max(.06, Math.min(1.45, S.drag.el+dy*.004)); }
+  S.touched = true;
   redraw();
 });
 cv.addEventListener('wheel', e => {
@@ -419,13 +423,14 @@ cv.addEventListener('wheel', e => {
   const s2=Math.min(900, Math.max(.4, S.ob.S*Math.pow(.999, e.deltaY)));
   S.ob.px0 = mx-(mx-S.ob.px0)*(s2/S.ob.S);
   S.ob.py0 = my-(my-S.ob.py0)*(s2/S.ob.S);
-  S.ob.S = s2; redraw();
+  S.ob.S = s2; S.touched = true; redraw();
 }, {passive:false});
 function resize(){
   const r = cv.parentElement.getBoundingClientRect();
   dpr = Math.min(2, devicePixelRatio||1);
   W = r.width; H = r.height;
   cv.width = Math.max(1, Math.round(W*dpr)); cv.height = Math.max(1, Math.round(H*dpr));
+  if (!S.touched) fit();
   redraw();
 }
 new ResizeObserver(resize).observe(cv.parentElement);
