@@ -54,6 +54,14 @@ CKPT = REPO / 'best.pt'
 # [Background, Car, Pedestrian, Cyclist] -> grid25
 DET2GRID = np.array([g.other, g.car, g.ped, g.ped], np.int64)
 
+# what the DETECTOR itself did with each point, which grid25's 8 classes
+# cannot express. the important split is the last two: a point in a cluster
+# the network examined and rejected is a very different thing from a point
+# the network never saw, and both currently land in `other`.
+PROV = ['ground', 'background', 'car', 'pedestrian', 'cyclist', 'unclustered']
+P_GROUND, P_BG, P_CAR, P_PED, P_CYC, P_NONE = range(6)
+DET2PROV = np.array([P_BG, P_CAR, P_PED, P_CYC], np.int64)
+
 
 def _import():
     if str(SRC) not in sys.path:
@@ -110,10 +118,11 @@ def _features(xyz, inten, agl, maxrange, pca2_batch):
                            inten[:, :, None]], axis=2).transpose(0, 2, 1)
 
 
-def predict(pts4, model, cfg, batch=256, seed=0):
+def predict(pts4, model, cfg, batch=256, seed=0, with_prov=False):
     """
     pts4: (N, 4) velodyne x y z intensity, sensor at the origin.
-    returns (labels in grid25 classes, info dict).
+    returns (labels in grid25 classes, info dict), and with with_prov=True a
+    third array saying what the detector actually did with each point (PROV).
     """
     import torch
     _, remove_ground, cluster_points, pca2_batch, _ = _import()
@@ -121,12 +130,15 @@ def predict(pts4, model, cfg, batch=256, seed=0):
     N = len(pts4)
     lab = np.full(N, g.other, np.int64)
 
+    prov = np.full(N, P_NONE, np.int64)
     is_ground, agl, _ = remove_ground(pts4[:, :3], thresh=cfg.ground_thresh)
     lab[is_ground] = g.gnd
+    prov[is_ground] = P_GROUND
 
     fg = np.flatnonzero(~is_ground)
     if len(fg) < cfg.min_cluster_pts:
-        return lab, dict(ground=int(is_ground.sum()), clusters=0, counts={})
+        empty = dict(ground=int(is_ground.sum()), clusters=0, counts={})
+        return (lab, empty, prov) if with_prov else (lab, empty)
 
     obj = pts4[fg]
     cl = cluster_points(obj[:, :3], voxel=cfg.cluster_voxel,
@@ -134,7 +146,8 @@ def predict(pts4, model, cfg, batch=256, seed=0):
                         max_points=cfg.max_cluster_pts)
     ncl = int(cl.max()) + 1
     if ncl <= 0:
-        return lab, dict(ground=int(is_ground.sum()), clusters=0, counts={})
+        empty = dict(ground=int(is_ground.sum()), clusters=0, counts={})
+        return (lab, empty, prov) if with_prov else (lab, empty)
 
     # gather cfg.n_points per cluster, padding by resampling as training did
     order = np.argsort(cl, kind='stable')
@@ -164,15 +177,18 @@ def predict(pts4, model, cfg, batch=256, seed=0):
 
     hit = cl >= 0
     lab[fg[hit]] = DET2GRID[pred[cl[hit]]]
+    prov[fg[hit]] = DET2PROV[pred[cl[hit]]]
 
     names = ['Background', 'Car', 'Pedestrian', 'Cyclist']
-    return lab, dict(
+    out = dict(
         ground=int(is_ground.sum()),
         clusters=ncl,
         clustered_points=int(hit.sum()),
         unclustered=int((~hit).sum()),
         counts={names[i]: int((pred == i).sum()) for i in range(4)},
+        provcount={PROV[i]: int((prov == i).sum()) for i in range(6)},
         mean_conf=float(conf.mean()))
+    return (lab, out, prov) if with_prov else (lab, out)
 
 
 if __name__ == '__main__':

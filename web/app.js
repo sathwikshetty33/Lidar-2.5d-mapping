@@ -37,9 +37,17 @@ function shades(cols){
 const SPECTRAL = ramp256(['#7A1E8C','#2A2FB4','#0B7FD6','#0FC3B4','#57D63A','#CFE01C','#FFA51C','#E32A1C']);
 const CLASSC = ['#9A8C7A','#7A8899','#C05A5A','#E0A33E','#5D9B6B','#6F5FA8','#E0457B','#A0A6AD'];
 const CLASSN = ['ground','road','building','pole','vegetation','car','pedestrian','other'];
-let SP = null, CL = null, TV = null;
+
+/* what the detector itself did with each point. the two desaturated entries
+   are the ones the network contributed nothing to: ground comes from the
+   geometric remover, and "never clustered" never reached the network at all.
+   the saturated ones are its actual output. */
+const DETC = ['#8E9A86','#3E6E9C','#6F5FA8','#E0457B','#E0A33E','#B5654A','#CBD1D8'];
+const DETN = ['ground (geometric)','examined, rejected','car','pedestrian',
+              'cyclist','never clustered','no cell here'];
+let SP = null, CL = null, TV = null, DT = null;
 const pal = () => { if (!SP){ SP = shades(SPECTRAL); CL = shades(CLASSC);
-  TV = shades([css('--ink3'), css('--no'), css('--ok')]); } };
+  TV = shades([css('--ink3'), css('--no'), css('--ok')]); DT = shades(DETC); } };
 
 /* ------------------------------------------------------------------ state */
 const S = {
@@ -60,7 +68,8 @@ function tiersOf(f){
   if (!d) return null;
   if (!d._t) d._t = d.tiers.map(t => ({res:t.res, x0:t.x0, y0:t.y0, nx:t.nx, ny:t.ny,
     rin:t.rin, rout:t.rout, ztop:dec(t.ztop,Int16Array), zgnd:dec(t.zgnd,Int16Array),
-    cls:dec(t.cls,Uint8Array), flag:dec(t.flag,Uint8Array)}));
+    cls:dec(t.cls,Uint8Array), flag:dec(t.flag,Uint8Array),
+    det:t.det ? dec(t.det,Uint8Array) : null}));
   return d._t;
 }
 
@@ -152,7 +161,7 @@ function draw(){
   const LX=-.42,LY=-.34,LZ=.84;
   const zlo = S.src==='zgnd' ? d.zglo : d.zlo;
   const zsp = (S.src==='zgnd' ? d.zghi-d.zglo : d.zhi-d.zlo) || 1;
-  const P = S.paint==='height'?SP : S.paint==='cls'?CL : TV;
+  const P = S.paint==='height'?SP : S.paint==='cls'?CL : S.paint==='det'?DT : TV;
   let cur=-1;
   ctx.lineWidth=.6; ctx.strokeStyle=css('--ink');
   for (let o=0;o<qn;o++){
@@ -170,6 +179,7 @@ function draw(){
     let ci;
     if (S.paint==='height'){ let u=((h0+h1+h2+h3)*.25-zlo)/zsp; ci=u<=0?0:u>=1?255:(u*255)|0; }
     else if (S.paint==='cls') ci=Tt.cls[p0];
+    else if (S.paint==='det'){ const v = Tt.det ? Tt.det[p0] : 255; ci = v===255 ? 6 : v; }
     else { const fl=Tt.flag[p0]; ci=(fl&1)?((fl>>1)&1)+1:0; }
     const idx=ci*NSH+sh;
     if (idx!==cur){ cur=idx; ctx.fillStyle=P[idx]; }
@@ -229,6 +239,20 @@ function legend(){
         <i style="width:11px;height:11px;border-radius:2px;background:${CLASSC[i]}"></i>${n}
         <b class="mono" style="margin-left:auto;font-weight:400;color:var(--ink3)">${fmt(d.clscount[i])}</b></div>`).join('')
       + `<div class="ends" style="margin-top:5px"><span>${d.source==='model'?'only car and pedestrian come from the network':'ground truth'}</span></div>`;
+  } else if (S.paint === 'det'){
+    if (d.source !== 'model'){
+      box.innerHTML = `<div class="ends"><span>only available with detector labels &mdash;
+        ground truth has no detector to report on</span></div>`;
+      return;
+    }
+    const pc = d.provcount || {};
+    const keys = ['ground','background','car','pedestrian','cyclist','unclustered'];
+    box.innerHTML = DETN.slice(0,6).map((n,i)=>
+      `<div style="display:flex;align-items:center;gap:7px;font-size:11.5px">
+        <i style="width:11px;height:11px;border-radius:2px;background:${DETC[i]}"></i>${n}
+        <b class="mono" style="margin-left:auto;font-weight:400;color:var(--ink3)">${fmt(pc[keys[i]]||0)}</b></div>`).join('')
+      + `<div class="ends" style="margin-top:5px"><span>point counts &middot; the two grey
+         entries are what the network never got a say in</span></div>`;
   } else {
     box.innerHTML = [['--ok','drivable'],['--no','blocked'],['--ink3','no returns here']]
       .map(([c,n])=>`<div style="display:flex;align-items:center;gap:7px;font-size:11.5px">

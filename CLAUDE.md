@@ -421,6 +421,13 @@ contribution. Say so explicitly in the presentation.
   precomputed: a job names a sequence and a frame selection, and a worker runs
   fetch -> label -> grid -> surface per frame, streaming each one to the browser
   over SSE as it lands. `./run_server.sh`, then http://127.0.0.1:8011.
+  - Four colourings: height, class, drivable, and **detector**. The last one is
+    the useful one with model labels, because the plain class view collapses to
+    73% ground / 24% other / 3% car. It splits `other` into *examined and
+    rejected* (10.7% of points) versus *never clustered* (22.5%) — the second
+    is the network's blind spot and was previously invisible. `predict.predict`
+    supplies it via `with_prov=True`; it rides to the browser as one extra byte
+    per surface node.
   - `POST /api/jobs {seq, mode, start, count, stride, source, seed}` — mode is
     `sequential` (consecutive sweeps, real motion) or `random` (scattered);
     source is `model` or `truth`.

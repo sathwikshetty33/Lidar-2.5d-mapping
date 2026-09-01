@@ -47,7 +47,7 @@ def cells_json(m, ms, npts, source, views, pc):
     return dict(meta=meta, cells=cells, pc=pc)
 
 
-def surface_json(m, x, y, z, lab, mult=1, quiet=False):
+def surface_json(m, x, y, z, lab, mult=1, quiet=False, extra=None):
     """the dense field, on the same tiers, for the shaded surface view."""
     rast, dist, gox, goy = g.groundmap(x, y, z, lab)
     ckey = ((m['lvl'].astype(np.int64) << 62) |
@@ -90,10 +90,14 @@ def surface_json(m, x, y, z, lab, mult=1, quiet=False):
         flag = (hit.astype(np.uint8)
                 | (np.where(hit, m['trav'][j].reshape(ny, nx), 0).astype(np.uint8) << 1)
                 | (known.astype(np.uint8) << 2))
-        tiers.append(dict(res=res, x0=float(x0), y0=float(y0), nx=nx, ny=ny,
-                          rin=0.0 if t == 0 else g.bounds[t-1], rout=float(R),
-                          ztop=b64(i16(ztop)), zgnd=b64(i16(zgnd)),
-                          cls=b64(cls), flag=b64(flag)))
+        tier = dict(res=res, x0=float(x0), y0=float(y0), nx=nx, ny=ny,
+                    rin=0.0 if t == 0 else g.bounds[t-1], rout=float(R),
+                    ztop=b64(i16(ztop)), zgnd=b64(i16(zgnd)),
+                    cls=b64(cls), flag=b64(flag))
+        # any extra per-cell byte channel, resolved to the node's owning cell
+        for name, arr in (extra or {}).items():
+            tier[name] = b64(np.where(hit, arr[j].reshape(ny, nx), 255).astype(np.uint8))
+        tiers.append(tier)
         tot += nx*ny
         if not quiet:
             print(f'  tier {t} {res*100:4.0f} cm  {nx:4d}x{ny:4d}={nx*ny:8d}  '

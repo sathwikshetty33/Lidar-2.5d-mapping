@@ -100,6 +100,30 @@ def fetch(seq: str, frame: str, want_truth: bool):
     return b, (lb if lb.exists() else None), got
 
 
+def cell_provenance(m, x, y, prov):
+    """
+    the detector's own verdict per cell, not per point.
+
+    a cell that contains a car or a person takes that, whatever else is in it --
+    same priority rule the class histogram uses, and for the same reason. what
+    is left over resolves by majority, which is how "the network rejected this"
+    stays distinguishable from "the network never saw this".
+    """
+    ix = np.floor(x / g.res0).astype(np.int64)
+    iy = np.floor(y / g.res0).astype(np.int64)
+    lv = g.blocklevel(ix, iy)
+    pk = ((lv << 62) | (((ix >> lv) & 0x7fffffff) << 31) | ((iy >> lv) & 0x7fffffff))
+    ck = ((m['lvl'].astype(np.int64) << 62)
+          | ((m['ix'] & 0x7fffffff) << 31) | (m['iy'] & 0x7fffffff))
+    cid = np.searchsorted(ck, pk)
+    h = np.zeros((len(ck), 6), np.int64)
+    np.add.at(h, (cid, prov), 1)
+    out = h.argmax(1).astype(np.uint8)
+    for critical in (2, 3, 4):                 # car, pedestrian, cyclist
+        out[h[:, critical] > 0] = critical
+    return out
+
+
 def prefetch(seq: str, frame: str, want_truth: bool):
     """pull the raw files only. safe to run several of these at once."""
     try:
@@ -127,7 +151,7 @@ def build(seq: str, frame: str, source: str = 'model'):
                   _fetch_ms.pop((seq, frame), 0) / 1000)
 
     pts4 = np.fromfile(binp, np.float32).reshape(-1, 4)
-    info = {}
+    info, prov = {}, None
     t0 = time.perf_counter()
     if source == 'truth':
         if labp is None:
@@ -136,7 +160,7 @@ def build(seq: str, frame: str, source: str = 'model'):
     else:
         import predict
         m_, cfg = model()
-        lab, info = predict.predict(pts4, m_, cfg)
+        lab, info, prov = predict.predict(pts4, m_, cfg, with_prov=True)
     t_label = time.perf_counter() - t0
 
     x, y, z = (pts4[:, i].astype(float) for i in range(3))
@@ -147,8 +171,12 @@ def build(seq: str, frame: str, source: str = 'model'):
     m = g.build(np.stack([x, y, z], 1), lab)
     t_grid = time.perf_counter() - t0
 
+    extra = {}
+    if prov is not None:
+        extra['det'] = cell_provenance(m, x, y, prov[k])
+
     t0 = time.perf_counter()
-    srf = surface_json(m, x, y, z, lab, mult=SURF_MULT, quiet=True)
+    srf = surface_json(m, x, y, z, lab, mult=SURF_MULT, quiet=True, extra=extra)
     t_surf = time.perf_counter() - t0
 
     s = g.memstats(m)
@@ -164,6 +192,7 @@ def build(seq: str, frame: str, source: str = 'model'):
         drivable=round(100 * float(m['trav'].mean()), 1),
         lvlcount=[int((m['lvl'] == i).sum()) for i in range(4)],
         clscount=[int(c) for c in np.bincount(m['cls'], minlength=8)],
+        provcount=info.get('provcount', {}),
         clusters=info.get('clusters', 0),
         cars=info.get('counts', {}).get('Car', 0),
         vru=(info.get('counts', {}).get('Pedestrian', 0)
