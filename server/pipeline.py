@@ -29,7 +29,7 @@ RAW.mkdir(parents=True, exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=True)
 
 SURF_MULT = 4          # surface base 20/40/80/160 cm, keeps a frame ~400 KB
-CACHE_V = 3            # bump when the frame payload changes shape, so stale
+CACHE_V = 4            # bump when the frame payload changes shape, so stale
                        # cache entries are rebuilt instead of silently served
 
 # the left colour camera that rode along with the laser. it is FORWARD ONLY,

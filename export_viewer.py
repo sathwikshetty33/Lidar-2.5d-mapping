@@ -84,12 +84,19 @@ def surface_json(m, x, y, z, lab, mult=1, quiet=False, extra=None):
         # and the surface renders as a comb.
         bad = np.isnan(top)
         d, idx = ndimage.distance_transform_edt(bad, return_indices=True)
-        ztop = np.where(d*res <= max(0.6, 4*res), top[tuple(idx)], zgnd)
+        near = d*res <= max(0.6, 4*res)
+        ztop = np.where(near, top[tuple(idx)], zgnd)
         ztop = np.maximum(ndimage.median_filter(ztop, 3, mode='nearest'), zgnd)
+
+        # a node whose HEIGHT was inherited from a neighbour must inherit that
+        # neighbour's class and drivability too. filling the height but leaving
+        # the class at `other` puts a grey roof on a purple car -- the surface
+        # says "car" and the colour says "not a car" about the same node.
         cls = np.where(hit, m['cls'][j].reshape(ny, nx), 7).astype(np.uint8)
-        flag = (hit.astype(np.uint8)
-                | (np.where(hit, m['trav'][j].reshape(ny, nx), 0).astype(np.uint8) << 1)
-                | (known.astype(np.uint8) << 2))
+        trav = np.where(hit, m['trav'][j].reshape(ny, nx), 0).astype(np.uint8)
+        cls = np.where(near, cls[tuple(idx)], cls)
+        trav = np.where(near, trav[tuple(idx)], trav)
+        flag = (hit.astype(np.uint8) | (trav << 1) | (known.astype(np.uint8) << 2))
         tier = dict(res=res, x0=float(x0), y0=float(y0), nx=nx, ny=ny,
                     rin=0.0 if t == 0 else g.bounds[t-1], rout=float(R),
                     ztop=b64(i16(ztop)), zgnd=b64(i16(zgnd)),
