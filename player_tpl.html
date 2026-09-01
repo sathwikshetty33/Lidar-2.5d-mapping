@@ -1,0 +1,505 @@
+<title>Adaptive Grid Sequence</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --paper:#E9ECF0; --surface:#FFFFFF; --stage:#FAFBFC;
+  --ink:#141C26; --ink2:#5C6A7A; --ink3:#8B98A6;
+  --rule:#D2D8E1; --rule2:#E4E8EE;
+  --mark:#B3123F; --markw:#FFFFFF; --ok:#3E9B72; --no:#C0453F;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --paper:#10151B; --surface:#171E27; --stage:#0C1116;
+  --ink:#E4EAF1; --ink2:#8A97A6; --ink3:#66727F;
+  --rule:#29333F; --rule2:#1F272F;
+  --mark:#FF4D77; --markw:#10151B; --ok:#4FB585; --no:#E05C55;}}
+:root[data-theme="dark"]{
+  --paper:#10151B; --surface:#171E27; --stage:#0C1116;
+  --ink:#E4EAF1; --ink2:#8A97A6; --ink3:#66727F;
+  --rule:#29333F; --rule2:#1F272F;
+  --mark:#FF4D77; --markw:#10151B; --ok:#4FB585; --no:#E05C55;}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,sans-serif;font-size:13px;line-height:1.45}
+.app{display:grid;grid-template-rows:auto 1fr auto;height:100vh;height:100dvh}
+
+.head{background:var(--surface);border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;align-items:center;gap:16px;padding:10px 16px}
+.head h1{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.head p{margin:0;font-size:11px;color:var(--ink2)}
+.stat{display:flex;flex-direction:column;gap:0;padding:3px 10px;border-left:1px solid var(--rule)}
+.stat b{font-family:"IBM Plex Mono",monospace;font-size:14px;font-weight:600;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stat span{font-family:"IBM Plex Mono",monospace;font-size:9px;text-transform:uppercase;
+  letter-spacing:.09em;color:var(--ink2)}
+.stats{display:flex;margin-left:auto;flex-wrap:wrap}
+
+.wrap{display:grid;grid-template-columns:236px 1fr;min-height:0}
+.rail{background:var(--surface);border-right:1px solid var(--rule);overflow-y:auto}
+.sect{border-bottom:1px solid var(--rule2);padding:11px 13px;display:flex;
+  flex-direction:column;gap:7px}
+.sect h2{margin:0;font-family:"IBM Plex Mono",monospace;font-size:9px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.11em;color:var(--ink2)}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips button{all:unset;cursor:pointer;padding:4px 9px;border:1px solid var(--rule);
+  border-radius:2px;font-family:"IBM Plex Mono",monospace;font-size:10.5px;color:var(--ink2)}
+.chips button:hover{border-color:var(--ink3);color:var(--ink)}
+.chips button:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+.chips button.go{background:var(--mark);color:var(--markw);border-color:var(--mark);
+  font-weight:600;min-width:62px;text-align:center}
+.bar{height:12px;border-radius:1px;border:1px solid var(--rule)}
+.ends{display:flex;justify-content:space-between;font-family:"IBM Plex Mono",monospace;
+  font-size:10px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.keys{display:flex;flex-direction:column;gap:3px}
+.key{display:flex;align-items:center;gap:7px;font-size:11.5px}
+.key i{width:11px;height:11px;border-radius:1px;flex:none;border:1px solid rgba(0,0,0,.18)}
+dl.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;margin:0;
+  font-family:"IBM Plex Mono",monospace;font-size:11px;font-variant-numeric:tabular-nums}
+dl.kv dt{color:var(--ink2)} dl.kv dd{margin:0;text-align:right}
+.note{font-size:11px;color:var(--ink2);line-height:1.5}
+
+.pane{position:relative;background:var(--stage);min-height:0}
+.pane canvas{position:absolute;inset:0;width:100%;height:100%;display:block;cursor:grab}
+.tag{position:absolute;top:9px;left:11px;font-family:"IBM Plex Mono",monospace;font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.11em;color:var(--ink2);background:var(--surface);
+  border:1px solid var(--rule);border-radius:2px;padding:3px 6px;pointer-events:none}
+.tag.r{left:auto;right:11px;text-transform:none;letter-spacing:.02em;font-size:10.5px;color:var(--ink3)}
+
+.transport{background:var(--surface);border-top:1px solid var(--rule);
+  display:flex;align-items:center;gap:14px;padding:9px 16px}
+.transport input[type=range]{flex:1;accent-color:var(--mark);min-width:120px}
+#fname{font-family:"IBM Plex Mono",monospace;font-size:12px;font-weight:600;min-width:118px}
+#spark{height:34px;width:230px;flex:none}
+@media (max-width:860px){.wrap{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .rail{max-height:38vh;border-right:0;border-bottom:1px solid var(--rule)}
+  #spark{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="head">
+    <div>
+      <h1>Adaptive Grid Sequence</h1>
+      <p id="src">&mdash;</p>
+    </div>
+    <div class="stats">
+      <div class="stat"><b id="v_pts">&mdash;</b><span>points in</span></div>
+      <div class="stat"><b id="v_cells">&mdash;</b><span>adaptive cells</span></div>
+      <div class="stat"><b id="v_drv">&mdash;</b><span>drivable</span></div>
+      <div class="stat"><b id="v_cars">&mdash;</b><span>cars detected</span></div>
+      <div class="stat"><b id="v_ms">&mdash;</b><span>net + grid</span></div>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <aside class="rail">
+      <div class="sect"><h2>Surface</h2>
+        <div class="chips" id="src_c"></div>
+        <div class="chips" id="paint_c"></div>
+        <div class="chips" id="opt_c"></div>
+      </div>
+      <div class="sect"><h2>Height scale</h2><div class="chips" id="vex_c"></div></div>
+      <div class="sect"><h2>Legend</h2><div id="legend"></div></div>
+      <div class="sect"><h2>This frame</h2><dl class="kv" id="kv"></dl></div>
+      <div class="sect"><h2>How to read it</h2>
+        <p class="note">Every frame is an <b>independent</b> map &mdash; there are no ego
+        poses here and no temporal fusion, so the sensor stays at the origin and
+        the world flows past. Labels come from the PointNet detector, not from
+        ground truth.</p>
+      </div>
+    </aside>
+
+    <div class="pane">
+      <canvas id="cv"></canvas>
+      <div class="tag" id="ptag">Elevation surface &mdash; predicted labels</div>
+      <div class="tag r" id="rtag"></div>
+    </div>
+  </div>
+
+  <div class="transport">
+    <div class="chips">
+      <button id="prev" title="previous frame">&#9664;</button>
+      <button id="play" class="go">Play</button>
+      <button id="next" title="next frame">&#9654;</button>
+    </div>
+    <span id="fname">&mdash;</span>
+    <input type="range" id="scrub" min="0" max="0" value="0" step="1" aria-label="frame">
+    <div class="chips" id="speed_c"></div>
+    <canvas id="spark" title="drivable % per frame"></canvas>
+  </div>
+</div>
+
+<script>/*__SEQ__*/</script>
+<script>
+(function(){
+"use strict";
+const D = window.SEQ, F = D.frames, NF = F.length;
+
+function dec(b64, T){
+  const s = atob(b64), u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return new T(u.buffer);
+}
+/* decode every frame up front: 11 frames of coarse surface is a few MB and
+   decoding mid-playback would stutter */
+const FR = F.map(f => ({
+  ...f,
+  tiers: f.tiers.map(t => ({
+    res:t.res, x0:t.x0, y0:t.y0, nx:t.nx, ny:t.ny, rin:t.rin, rout:t.rout,
+    ztop:dec(t.ztop, Int16Array), zgnd:dec(t.zgnd, Int16Array),
+    cls:dec(t.cls, Uint8Array), flag:dec(t.flag, Uint8Array)}))
+}));
+
+const CLASS = ['#9A8C7A','#7A8899','#C05A5A','#E0A33E','#5D9B6B','#6F5FA8','#E0457B','#A0A6AD'];
+function toRGB(s){
+  s = s.trim();
+  if (s[0] === '#'){
+    if (s.length === 4) s = '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3];
+    return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+  }
+  const m = s.match(/[\d.]+/g); return [+m[0], +m[1], +m[2]];
+}
+function ramp256(stops){
+  const out = new Array(256), n = stops.length - 1, rgb = stops.map(toRGB);
+  for (let i = 0; i < 256; i++){
+    const t = i/255*n, k = Math.min(n-1, Math.floor(t)), f = t-k, a = rgb[k], b = rgb[k+1];
+    out[i] = 'rgb('+Math.round(a[0]+(b[0]-a[0])*f)+','+Math.round(a[1]+(b[1]-a[1])*f)+','
+                   +Math.round(a[2]+(b[2]-a[2])*f)+')';
+  }
+  return out;
+}
+const SPECTRAL = ramp256(['#7A1E8C','#2A2FB4','#0B7FD6','#0FC3B4','#57D63A','#CFE01C','#FFA51C','#E32A1C']);
+const NSH = 14;
+function shadeRamp(cols){
+  const rgb = cols.map(toRGB), out = new Array(cols.length*NSH);
+  for (let c = 0; c < cols.length; c++) for (let q = 0; q < NSH; q++){
+    const f = .42 + .70*(q/(NSH-1));
+    out[c*NSH+q] = 'rgb('+Math.min(255,rgb[c][0]*f|0)+','+Math.min(255,rgb[c][1]*f|0)+','
+                         +Math.min(255,rgb[c][2]*f|0)+')';
+  }
+  return out;
+}
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+let SP=null, CL=null, TV=null;
+const pal = () => { if (!SP){ SP=shadeRamp(SPECTRAL); CL=shadeRamp(CLASS);
+  TV=shadeRamp([css('--ink3'), css('--no'), css('--ok')]); } };
+
+/* ------------------------------------------------------------- state */
+const ob = {az:3.90, el:.40, S:14, px0:0, py0:0, vex:2};
+const srf = {src:'ztop', paint:'height', mesh:true, rings:true};
+let cur = 0, playing = false, spf = 600, last = 0, drag = null;
+
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+let W=0, H=0, dpr=1;
+const QMAX = 1<<17;
+const qk = new Int32Array(QMAX), qd = new Float32Array(QMAX),
+      qo = new Int32Array(QMAX), qc = new Int32Array(1026);
+const KS = new Int32Array(4);
+
+function basis(S){
+  const ca=Math.cos(ob.az), sa=Math.sin(ob.az), ce=Math.cos(ob.el), se=Math.sin(ob.el);
+  return {ux:-sa*S, uy:ca*S, vx:se*ca*S, vy:se*sa*S, vz:-ce*S*ob.vex, ca, sa, ce};
+}
+function fit(){
+  const T = FR[cur].tiers, B = basis(1);
+  let ax=1e9,bx=-1e9,ay=1e9,by=-1e9;
+  for (const t of T){
+    for (let j = 0; j < t.ny; j += 3) for (let i = 0; i < t.nx; i += 3){
+      if (!(t.flag[j*t.nx+i] & 4)) continue;
+      const X = t.x0+i*t.res, Y = t.y0+j*t.res;
+      const a = X*B.ux+Y*B.uy;
+      const b0 = X*B.vx+Y*B.vy+t.zgnd[j*t.nx+i]*.001*B.vz;
+      const b1 = X*B.vx+Y*B.vy+t.ztop[j*t.nx+i]*.001*B.vz;
+      if(a<ax)ax=a; if(a>bx)bx=a;
+      if(b1<ay)ay=b1; if(b0>by)by=b0;
+    }
+  }
+  if (ax > bx) return;
+  ob.S = Math.min(W*.9/(bx-ax||1), H*.9/(by-ay||1));
+  ob.px0 = W/2 - (ax+bx)/2*ob.S;
+  ob.py0 = H/2 - (ay+by)/2*ob.S;
+}
+
+function draw(){
+  pal();
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle = css('--stage'); ctx.fillRect(0,0,W,H);
+  const T = FR[cur].tiers, B = basis(ob.S), S = ob.S;
+  const ux=B.ux, uy=B.uy, vx=B.vx, vy=B.vy, vz=B.vz, X0=ob.px0, Y0=ob.py0;
+  const L0=-70,L1=W+70,T0=-70,T1=H+70;
+
+  if (srf.rings){
+    ctx.strokeStyle = css('--rule'); ctx.setLineDash([3,4]); ctx.lineWidth = 1;
+    for (const r of D.bounds){
+      ctx.beginPath();
+      for (let q=0;q<=72;q++){ const w=q/72*6.2832, X=r*Math.cos(w), Y=r*Math.sin(w);
+        const a=X*ux+Y*uy+X0, b=X*vx+Y*vy+Y0; q?ctx.lineTo(a,b):ctx.moveTo(a,b); }
+      ctx.stroke();
+    }
+    ctx.setLineDash([]);
+  }
+
+  /* one stride shared by every tier, so the 2:1 ratio between them survives
+     at any zoom; a per-tier stride would flatten them all to one size */
+  const budget = drag||playing ? 16000 : 40000;
+  let k = 1, qn = 0;
+  while (D.res0*k*S < .8) k <<= 1;
+  for(;;){
+    qn = 0;
+    for (let t = 0; t < T.length; t++){
+      KS[t] = k; const Tt = T[t];
+      if (k >= Tt.nx || k >= Tt.ny) continue;
+      const A = Tt[srf.src], nx = Tt.nx;
+      const rin = t ? Tt.rin - Tt.res*k*1.5 : -1, rout = Tt.rout;
+      for (let j = 0; j+k < Tt.ny; j += k){
+        const Y = Tt.y0 + (j+k*.5)*Tt.res;
+        for (let i = 0; i+k < nx; i += k){
+          const X = Tt.x0 + (i+k*.5)*Tt.res;
+          const r = Math.hypot(X,Y);
+          if (r < rin || r >= rout) continue;
+          if (!(Tt.flag[j*nx+i] & 4)) continue;
+          const a = X*ux+Y*uy+X0, b = X*vx+Y*vy+A[j*nx+i]*.001*vz+Y0;
+          if (a<L0||a>L1||b<T0||b>T1) continue;
+          if (qn >= QMAX) break;
+          qk[qn] = (t<<28)|(i<<14)|j; qd[qn++] = X*B.ca + Y*B.sa;
+        }
+      }
+    }
+    if (qn <= budget || k >= 64) break;
+    k <<= 1;
+  }
+
+  let lo=1e30, hi=-1e30;
+  for (let q=0;q<qn;q++){ const d=qd[q]; if(d<lo)lo=d; if(d>hi)hi=d; }
+  const NB=1024, sc=(NB-1)/(hi-lo||1);
+  qc.fill(0);
+  for (let q=0;q<qn;q++) qc[(((qd[q]-lo)*sc)|0)+1]++;
+  for (let b=0;b<NB;b++) qc[b+1]+=qc[b];
+  for (let q=0;q<qn;q++) qo[qc[((qd[q]-lo)*sc)|0]++] = q;
+
+  const LX=-.42, LY=-.34, LZ=.84;
+  const zlo=D.zlo, zsp=(D.zhi-D.zlo)||1;
+  const PALS = srf.paint==='height' ? SP : srf.paint==='cls' ? CL : TV;
+  let curc = -1;
+  ctx.lineWidth = .6; ctx.strokeStyle = css('--ink');
+
+  for (let o = 0; o < qn; o++){
+    const key = qk[qo[o]];
+    const t = key>>>28, i = (key>>>14)&0x3fff, j = key&0x3fff;
+    const Tt = T[t], kk = KS[t], nx = Tt.nx, A = Tt[srf.src];
+    const p0=j*nx+i, p1=p0+kk, p2=p0+kk*nx+kk, p3=p0+kk*nx;
+    const h0=A[p0]*.001, h1=A[p1]*.001, h2=A[p2]*.001, h3=A[p3]*.001;
+    const d = kk*Tt.res, X = Tt.x0+i*Tt.res, Y = Tt.y0+j*Tt.res;
+    const ax = X*ux+Y*uy+X0, ay = X*vx+Y*vy+Y0;
+    const dux=d*ux, duy=d*uy, dvx=d*vx, dvy=d*vy;
+    const gx = ((h1+h2)-(h0+h3))*.5/d*ob.vex, gy = ((h3+h2)-(h0+h1))*.5/d*ob.vex;
+    const inv = 1/Math.sqrt(gx*gx+gy*gy+1);
+    let nl = (-gx*LX - gy*LY + LZ)*inv; if (nl < 0) nl = 0;
+    const sh = (.12 + .88*nl)*(NSH-1) | 0;
+    let ci;
+    if (srf.paint === 'height'){
+      let u = ((h0+h1+h2+h3)*.25 - zlo)/zsp;
+      ci = u<=0?0 : u>=1?255 : (u*255)|0;
+    } else if (srf.paint === 'cls') ci = Tt.cls[p0];
+    else { const fl = Tt.flag[p0]; ci = (fl & 1) ? ((fl>>1)&1)+1 : 0; }
+    const idx = ci*NSH+sh;
+    if (idx !== curc){ curc = idx; ctx.fillStyle = PALS[idx]; }
+    ctx.beginPath();
+    ctx.moveTo(ax, ay+h0*vz);
+    ctx.lineTo(ax+dux, ay+dvx+h1*vz);
+    ctx.lineTo(ax+dux+duy, ay+dvx+dvy+h2*vz);
+    ctx.lineTo(ax+duy, ay+dvy+h3*vz);
+    ctx.closePath(); ctx.fill();
+    if (srf.mesh && d*S > 5.5) ctx.stroke();
+  }
+
+  /* the sensor, at the origin of every frame */
+  ctx.strokeStyle = css('--mark'); ctx.lineWidth = 1.5;
+  ctx.beginPath(); ctx.moveTo(X0, Y0); ctx.lineTo(X0, Y0 + 2.2*vz); ctx.stroke();
+  ctx.beginPath(); ctx.arc(X0, Y0, 3.5, 0, 6.2832); ctx.stroke();
+
+  document.getElementById('rtag').textContent =
+    'azimuth ' + (((ob.az*180/Math.PI)%360+360)%360).toFixed(0) + '\u00b0 \u00b7 elevation '
+    + (ob.el*180/Math.PI).toFixed(0) + '\u00b0 \u00b7 height \u00d7' + ob.vex + ' \u00b7 '
+    + T.map((t,i2)=>(t.res*KS[i2]*100).toFixed(0)).join(' / ') + ' cm mesh';
+}
+
+let pend = false;
+function redraw(){ if (pend) return; pend = true;
+  requestAnimationFrame(()=>{ pend = false; draw(); }); }
+
+/* --------------------------------------------------------------- ui */
+const el = id => document.getElementById(id);
+const fmt = n => n.toLocaleString('en-US');
+el('src').textContent = D.source;
+
+function stats(){
+  const f = FR[cur];
+  el('v_pts').textContent = fmt(f.npts);
+  el('v_cells').textContent = fmt(f.ncells);
+  el('v_drv').textContent = f.drivable.toFixed(1) + '%';
+  el('v_cars').textContent = f.cars;
+  el('v_ms').textContent = (f.ms_model + f.ms_grid) + ' ms';
+  el('fname').textContent = 'frame ' + f.name + '  ' + (cur+1) + '/' + NF;
+  el('scrub').value = cur;
+  const names = D.classes;
+  el('kv').innerHTML = [
+    ['points', fmt(f.npts)],
+    ['cells at ' + (D.res0/D.mult*100).toFixed(0) + ' cm', fmt(f.fine)],
+    ['adaptive cells', fmt(f.ncells)],
+    ['drivable', f.drivable.toFixed(1) + ' %'],
+    ['ground points', fmt(f.ground)],
+    ['clusters', f.clusters],
+    ['cars', f.cars],
+    ['pedestrian / cyclist', f.vru],
+    ['network', f.ms_model + ' ms'],
+    ['grid', f.ms_grid + ' ms'],
+  ].map(r => '<dt>'+r[0]+'</dt><dd>'+r[1]+'</dd>').join('');
+  spark();
+}
+
+function legend(){
+  const box = el('legend');
+  if (srf.paint === 'height'){
+    const st = []; for (let i=0;i<=10;i++) st.push(SPECTRAL[Math.round(i/10*255)]);
+    box.innerHTML = '<div class="bar" style="background:linear-gradient(90deg,'+st.join(',')+')"></div>'
+      + '<div class="ends"><span>'+D.zlo.toFixed(2)+' m</span><span>'
+      + (srf.src==='ztop'?'top of everything':'terrain only')
+      + '</span><span>'+D.zhi.toFixed(2)+' m</span></div>';
+  } else if (srf.paint === 'cls'){
+    box.innerHTML = '<div class="keys">' + D.classes.map((n,i) =>
+      '<div class="key"><i style="background:'+CLASS[i]+'"></i>'+n+'</div>').join('') + '</div>'
+      + '<div class="ends"><span>only car / pedestrian come from the network</span></div>';
+  } else {
+    box.innerHTML = '<div class="keys">'
+      + '<div class="key"><i style="background:'+css('--ok')+'"></i>drivable</div>'
+      + '<div class="key"><i style="background:'+css('--no')+'"></i>blocked</div>'
+      + '<div class="key"><i style="background:'+css('--ink3')+'"></i>no returns here</div></div>'
+      + '<div class="ends"><span>grey is terrain with no cell, not free space</span></div>';
+  }
+}
+
+function chips(id, opts, get, set){
+  el(id).innerHTML = opts.map(o =>
+    '<button data-v="'+o[0]+'" aria-pressed="'+(get()===o[0])+'">'+o[1]+'</button>').join('');
+  el(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    set(b.dataset.v);
+    [...el(id).children].forEach(x => x.setAttribute('aria-pressed', x === b));
+    legend(); redraw();
+  });
+}
+chips('src_c', [['ztop','Top surface'],['zgnd','Ground only']], ()=>srf.src,
+      v => { srf.src = v; setVex(v==='ztop'?2:8); fit(); });
+chips('paint_c', [['height','Height'],['cls','Class'],['trav','Drivable']],
+      ()=>srf.paint, v => srf.paint = v);
+chips('vex_c', [['1','\u00d71'],['2','\u00d72'],['4','\u00d74'],['8','\u00d78']],
+      ()=>String(ob.vex), v => setVex(+v));
+function setVex(v){
+  const f = v/ob.vex; ob.vex = v;
+  ob.py0 = H*.5 - (H*.5 - ob.py0)*f;
+  [...el('vex_c').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.v === v));
+}
+el('opt_c').innerHTML = '<button data-k="mesh" aria-pressed="true">Mesh lines</button>'
+  + '<button data-k="rings" aria-pressed="true">Range rings</button>';
+el('opt_c').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  srf[b.dataset.k] = !srf[b.dataset.k];
+  b.setAttribute('aria-pressed', srf[b.dataset.k]); redraw();
+});
+chips('speed_c', [['1200','0.5\u00d7'],['600','1\u00d7'],['300','2\u00d7'],['120','5\u00d7']],
+      ()=>String(spf), v => spf = +v);
+
+/* ------------------------------------------------------------ spark */
+const sp = el('spark'), sctx = sp.getContext('2d');
+function spark(){
+  const w = sp.clientWidth||200, h = sp.clientHeight||34, r = Math.min(2, devicePixelRatio||1);
+  sp.width = w*r; sp.height = h*r; sctx.setTransform(r,0,0,r,0,0);
+  sctx.clearRect(0,0,w,h);
+  const v = FR.map(f => f.drivable), mx = Math.max(...v), mn = Math.min(...v);
+  const X = i => 3 + i*(w-6)/Math.max(NF-1,1);
+  const Y = a => h-4 - (a-mn)/((mx-mn)||1)*(h-10);
+  sctx.strokeStyle = css('--rule'); sctx.lineWidth = 1;
+  sctx.beginPath(); sctx.moveTo(0,h-3.5); sctx.lineTo(w,h-3.5); sctx.stroke();
+  sctx.strokeStyle = css('--ink2'); sctx.lineWidth = 1.4;
+  sctx.beginPath(); v.forEach((a,i)=> i?sctx.lineTo(X(i),Y(a)):sctx.moveTo(X(i),Y(a)));
+  sctx.stroke();
+  sctx.fillStyle = css('--mark');
+  sctx.beginPath(); sctx.arc(X(cur), Y(v[cur]), 3, 0, 6.2832); sctx.fill();
+  sctx.font = '9px "IBM Plex Mono", monospace'; sctx.fillStyle = css('--ink3');
+  sctx.fillText('drivable ' + mn.toFixed(0) + '\u2013' + mx.toFixed(0) + '%', 3, 9);
+}
+
+/* -------------------------------------------------------- transport */
+function go(i){ cur = (i + NF) % NF; stats(); redraw(); }
+el('prev').onclick = () => { playing = false; el('play').textContent = 'Play'; go(cur-1); };
+el('next').onclick = () => { playing = false; el('play').textContent = 'Play'; go(cur+1); };
+el('scrub').oninput = e => { playing = false; el('play').textContent = 'Play'; go(+e.target.value); };
+el('play').onclick = () => {
+  playing = !playing; el('play').textContent = playing ? 'Pause' : 'Play';
+  last = performance.now();
+  if (playing) requestAnimationFrame(tick);
+};
+function tick(t){
+  if (!playing) return;
+  if (t - last >= spf){ last = t; go(cur+1); }
+  requestAnimationFrame(tick);
+}
+addEventListener('keydown', e => {
+  if (e.key === ' '){ e.preventDefault(); el('play').click(); }
+  else if (e.key === 'ArrowLeft') el('prev').click();
+  else if (e.key === 'ArrowRight') el('next').click();
+});
+
+/* ------------------------------------------------------ camera drag */
+cv.addEventListener('pointerdown', e => {
+  drag = {x:e.clientX, y:e.clientY, az:ob.az, el:ob.el, ox:ob.px0, oy:ob.py0};
+  cv.setPointerCapture(e.pointerId);
+});
+cv.addEventListener('pointerup', () => { drag = null; redraw(); });
+cv.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dx = e.clientX-drag.x, dy = e.clientY-drag.y;
+  if (e.shiftKey){ ob.px0 = drag.ox+dx; ob.py0 = drag.oy+dy; }
+  else { ob.az = drag.az - dx*.006;
+         ob.el = Math.max(.06, Math.min(1.45, drag.el + dy*.004)); }
+  redraw();
+});
+cv.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = cv.getBoundingClientRect(), mx = e.clientX-r.left, my = e.clientY-r.top;
+  const S2 = Math.min(900, Math.max(.4, ob.S*Math.pow(.999, e.deltaY)));
+  ob.px0 = mx - (mx-ob.px0)*(S2/ob.S);
+  ob.py0 = my - (my-ob.py0)*(S2/ob.S);
+  ob.S = S2; redraw();
+}, {passive:false});
+
+function resize(){
+  const r = cv.parentElement.getBoundingClientRect();
+  dpr = Math.min(2, devicePixelRatio||1);
+  W = r.width; H = r.height;
+  cv.width = Math.max(1, Math.round(W*dpr)); cv.height = Math.max(1, Math.round(H*dpr));
+  redraw();
+}
+new ResizeObserver(resize).observe(cv.parentElement);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { SP=null; redraw(); });
+
+el('scrub').max = NF-1;
+function fromHash(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  if (h.has('f')) cur = Math.max(0, Math.min(NF-1, +h.get('f')));
+  for (const k of ['src','paint']) if (h.has(k)) srf[k] = h.get(k);
+  for (const k of ['mesh','rings']) if (h.has(k)) srf[k] = h.get(k) === '1';
+  if (h.has('az')) ob.az = +h.get('az')*Math.PI/180;
+  if (h.has('el')) ob.el = +h.get('el')*Math.PI/180;
+  if (h.has('vex')) ob.vex = +h.get('vex');
+  for (const [id, v] of [['src_c', srf.src], ['paint_c', srf.paint],
+                         ['vex_c', String(ob.vex)], ['speed_c', String(spf)]])
+    [...el(id).children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === v));
+  [...el('opt_c').children].forEach(x =>
+    x.setAttribute('aria-pressed', srf[x.dataset.k]));
+}
+requestAnimationFrame(() => { resize(); fromHash(); fit(); stats(); legend(); redraw(); });
+})();
+</script>

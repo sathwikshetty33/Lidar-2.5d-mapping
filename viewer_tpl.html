@@ -1,0 +1,1223 @@
+<title>Adaptive Grid Inspector</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<style>
+:root{
+  --paper:#E9ECF0; --surface:#FFFFFF; --stage:#FAFBFC;
+  --ink:#141C26; --ink2:#5C6A7A; --ink3:#8B98A6;
+  --rule:#D2D8E1; --rule2:#E4E8EE;
+  --mark:#B3123F; --markw:#FFFFFF;
+  --ok:#3E9B72; --no:#C0453F;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --paper:#10151B; --surface:#171E27; --stage:#0C1116;
+    --ink:#E4EAF1; --ink2:#8A97A6; --ink3:#66727F;
+    --rule:#29333F; --rule2:#1F272F;
+    --mark:#FF4D77; --markw:#10151B;
+    --ok:#4FB585; --no:#E05C55;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#10151B; --surface:#171E27; --stage:#0C1116;
+  --ink:#E4EAF1; --ink2:#8A97A6; --ink3:#66727F;
+  --rule:#29333F; --rule2:#1F272F;
+  --mark:#FF4D77; --markw:#10151B;
+  --ok:#4FB585; --no:#E05C55;
+}
+
+*{box-sizing:border-box}
+body{background:var(--paper);color:var(--ink);
+  font-family:"IBM Plex Sans",system-ui,-apple-system,sans-serif;font-size:13px;line-height:1.45}
+.app{display:grid;grid-template-rows:auto 1fr;height:100vh;height:100dvh}
+
+/* ---------------------------------------------------------- header */
+.head{background:var(--surface);border-bottom:1px solid var(--rule);
+  display:flex;flex-wrap:wrap;align-items:center;gap:18px;padding:11px 16px}
+.brand{display:flex;flex-direction:column;gap:1px;margin-right:4px}
+.brand h1{margin:0;font-size:15px;font-weight:600;letter-spacing:-.01em}
+.brand p{margin:0;font-size:11px;color:var(--ink2)}
+.pipe{display:flex;align-items:center;gap:9px;flex-wrap:wrap}
+.stage-chip{display:flex;flex-direction:column;gap:1px;padding:4px 10px;border:1px solid var(--rule);
+  border-radius:2px;background:var(--paper)}
+.stage-chip b{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:14px;font-weight:600;
+  font-variant-numeric:tabular-nums;letter-spacing:-.02em}
+.stage-chip span{font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9.5px;
+  text-transform:uppercase;letter-spacing:.09em;color:var(--ink2)}
+.arrow{font-family:"IBM Plex Mono",ui-monospace,monospace;color:var(--ink3);font-size:13px}
+.timing{margin-left:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;
+  color:var(--ink2);text-align:right;font-variant-numeric:tabular-nums}
+.timing b{color:var(--ink);font-weight:600}
+
+/* ------------------------------------------------------------ body */
+.wrap{display:grid;grid-template-columns:266px 1fr;min-height:0}
+.rail{background:var(--surface);border-right:1px solid var(--rule);overflow-y:auto;
+  display:flex;flex-direction:column}
+.sect{border-bottom:1px solid var(--rule2);padding:12px 14px;display:flex;flex-direction:column;gap:8px}
+.sect[hidden]{display:none}
+.sect > h2{margin:0;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:9.5px;font-weight:600;
+  text-transform:uppercase;letter-spacing:.11em;color:var(--ink2)}
+
+.layers{display:flex;flex-direction:column;gap:1px}
+.layers button{all:unset;cursor:pointer;padding:5px 8px;border-radius:2px;font-size:12.5px;
+  display:flex;justify-content:space-between;align-items:center;gap:8px}
+.layers button:hover{background:var(--paper)}
+.layers button:focus-visible{outline:2px solid var(--mark);outline-offset:-2px}
+.layers button[aria-pressed="true"]{background:var(--mark);color:var(--markw);font-weight:500}
+.layers button[aria-pressed="true"] em{color:var(--markw);opacity:.75}
+.layers em{font-style:normal;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;color:var(--ink3)}
+
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chips[hidden]{display:none}
+.chips button{all:unset;cursor:pointer;padding:4px 9px;border:1px solid var(--rule);border-radius:2px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10.5px;letter-spacing:.03em;color:var(--ink2)}
+.chips button:hover{border-color:var(--ink3);color:var(--ink)}
+.chips button:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--surface);border-color:var(--ink)}
+
+#legend{display:flex;flex-direction:column;gap:6px}
+.bar{height:12px;border-radius:1px;border:1px solid var(--rule)}
+.ends{display:flex;justify-content:space-between;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10px;color:var(--ink2);font-variant-numeric:tabular-nums}
+.keys{display:flex;flex-direction:column;gap:3px}
+.key{display:flex;align-items:center;gap:7px;font-size:11.5px}
+.key i{width:11px;height:11px;border-radius:1px;flex:none;border:1px solid rgba(0,0,0,.18)}
+.key b{margin-left:auto;font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:10px;
+  font-weight:400;color:var(--ink3);font-variant-numeric:tabular-nums}
+
+#read{display:grid;grid-template-columns:auto 1fr;gap:2px 10px;
+  font-family:"IBM Plex Mono",ui-monospace,monospace;font-size:11px;font-variant-numeric:tabular-nums}
+#read dt{color:var(--ink2)}
+#read dd{margin:0;text-align:right}
+.hint{color:var(--ink3);font-size:11.5px;font-style:italic}
+
+.memo{font-size:11.5px;color:var(--ink2);line-height:1.5}
+.memo b{color:var(--ink);font-weight:600}
+table.mem{width:100%;border-collapse:collapse;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:10.5px;font-variant-numeric:tabular-nums}
+table.mem td{padding:2px 0;border-bottom:1px solid var(--rule2)}
+table.mem td:nth-child(2){text-align:right}
+table.mem td:nth-child(3){text-align:right;color:var(--ink2);padding-left:8px}
+table.mem tr:last-child td{border-bottom:0}
+
+/* ----------------------------------------------------------- stage */
+.stack{display:grid;grid-template-rows:1fr 216px;min-height:0}
+.stack.solo{grid-template-rows:1fr 0}
+.stack.solo .pane + .pane{display:none}
+.pane{position:relative;background:var(--stage);min-height:0}
+.pane + .pane{border-top:1px solid var(--rule)}
+.pane canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#plan{cursor:crosshair}
+.tag{position:absolute;top:9px;left:11px;font-family:"IBM Plex Mono",ui-monospace,monospace;
+  font-size:9.5px;text-transform:uppercase;letter-spacing:.11em;color:var(--ink2);
+  background:var(--surface);border:1px solid var(--rule);border-radius:2px;
+  padding:3px 6px;pointer-events:none}
+.tag.r{left:auto;right:11px;text-transform:none;letter-spacing:.02em;font-size:10.5px;color:var(--ink3)}
+
+@media (max-width:880px){
+  .wrap{grid-template-columns:1fr;grid-template-rows:auto 1fr}
+  .rail{border-right:0;border-bottom:1px solid var(--rule);max-height:40vh}
+  .stack{grid-template-rows:1fr 190px}
+}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="app">
+  <header class="head">
+    <div class="brand">
+      <h1>Adaptive Grid Inspector</h1>
+      <p id="src">3D LiDAR sweep &rarr; variable-resolution 2.5D elevation map</p>
+    </div>
+    <div class="pipe">
+      <div class="stage-chip"><b id="s1">&mdash;</b><span>points in</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="stage-chip"><b id="s2">&mdash;</b><span>cells at 5 cm</span></div>
+      <div class="arrow">&rarr;</div>
+      <div class="stage-chip"><b id="s3">&mdash;</b><span>adaptive cells</span></div>
+    </div>
+    <div class="timing">
+      <b id="s4">&mdash;</b> build, pure numpy<br><span id="s5">&mdash;</span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <aside class="rail">
+      <div class="sect">
+        <h2>View</h2>
+        <div class="chips" id="modes"></div>
+        <div class="chips" id="vex"></div>
+      </div>
+      <div class="sect" id="srfbox">
+        <h2>Surface</h2>
+        <div class="chips" id="srfsrc"></div>
+        <div class="chips" id="srfpaint"></div>
+        <div class="chips" id="srfmesh"></div>
+      </div>
+      <div class="sect">
+        <h2>Cell layer</h2>
+        <div class="layers" id="layers"></div>
+      </div>
+      <div class="sect">
+        <h2>Legend</h2>
+        <div id="legend"></div>
+      </div>
+      <div class="sect">
+        <h2>Overlay</h2>
+        <div class="chips" id="toggles"></div>
+      </div>
+      <div class="sect">
+        <h2>Go to</h2>
+        <div class="chips" id="presets"></div>
+      </div>
+      <div class="sect">
+        <h2>Cell under cursor</h2>
+        <dl id="read"></dl>
+        <p class="hint" id="readhint">Move over the map.</p>
+      </div>
+      <div class="sect">
+        <h2>What the grid costs</h2>
+        <table class="mem"><tbody id="mem"></tbody></table>
+        <p class="memo">Most of that factor is <b>sparsity</b> &mdash; only occupied
+          cells exist. Foveation adds the rest. The real win is statistics per
+          cell, not raw count.</p>
+      </div>
+    </aside>
+
+    <div class="stack">
+      <div class="pane">
+        <canvas id="plan"></canvas>
+        <div class="tag" id="ptag">Plan view &mdash; looking down</div>
+        <div class="tag r" id="scaletag"></div>
+      </div>
+      <div class="pane">
+        <canvas id="sect"></canvas>
+        <div class="tag">Section &mdash; one height column per cell</div>
+        <div class="tag r" id="secttag"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>/*__DATA__*/</script>
+<script>/*__SURF__*/</script>
+<script>
+(function(){
+"use strict";
+const D = window.GRID, M = D.meta;
+
+/* ------------------------------------------------------------ decode */
+function dec(b64, T){
+  const s = atob(b64), u = new Uint8Array(s.length);
+  for (let i = 0; i < s.length; i++) u[i] = s.charCodeAt(i);
+  return new T(u.buffer);
+}
+const C = D.cells;
+const cx = dec(C.cx, Int16Array),  cy = dec(C.cy, Int16Array),   lvl = dec(C.lvl, Uint8Array),
+      zg = dec(C.zg, Int16Array),  zmx = dec(C.zmax, Int16Array), clr = dec(C.clear, Int16Array),
+      obs = dec(C.obsh, Int16Array), rgh = dec(C.rough, Uint16Array), stp = dec(C.step, Int16Array),
+      dip = dec(C.dip, Int16Array), cls = dec(C.cls, Uint8Array), trv = dec(C.trav, Uint8Array),
+      npt = dec(C.n, Uint16Array);
+const N = cx.length;
+const P = D.pc;
+const pX = dec(P.x, Int16Array), pY = dec(P.y, Int16Array), pZ = dec(P.z, Int16Array), pL = dec(P.l, Uint8Array);
+const NP = pX.length;
+
+const U = 0.025;                                    // centre unit, metres
+const RES = new Float32Array(N);
+for (let i = 0; i < N; i++) RES[i] = M.res0 * (1 << lvl[i]);
+
+/* ----------------------------------------------------------- surface */
+/* a dense elevation surface on the SAME foveated tiers. the sparse cell set
+   is what you would store and transmit; this is what that grid looks like
+   as a surface, with a node wherever a cell of that tier could exist. */
+const SR = window.SURF;
+const TS = SR.tiers.map(t => ({
+  res:t.res, x0:t.x0, y0:t.y0, nx:t.nx, ny:t.ny, rin:t.rin, rout:t.rout,
+  ztop:dec(t.ztop, Int16Array), zgnd:dec(t.zgnd, Int16Array),
+  cls:dec(t.cls, Uint8Array), flag:dec(t.flag, Uint8Array)
+}));
+const srf = {src:'ztop', paint:'height', mesh:true};
+(function(){
+  let a = 1e9, b = -1e9;
+  for (const T of TS)
+    for (let i = 0; i < T.zgnd.length; i += 3){
+      const v = T.zgnd[i]*.001; if (v < a) a = v; if (v > b) b = v;
+    }
+  SR.zglo = a; SR.zghi = b;
+})();
+const zrange = () => srf.src === 'zgnd' ? [SR.zglo, SR.zghi] : [SR.zlo, SR.zhi];
+const QMAX = 1 << 18;
+const qkey = new Int32Array(QMAX), qdep = new Float32Array(QMAX),
+      qord = new Int32Array(QMAX), qcnt = new Int32Array(1026);
+const KS = new Int32Array(4);
+
+/* ------------------------------------------------------------ colour */
+const TERRAIN = ['#2B2E5F','#2E6E8E','#4FA07A','#C9B871','#F0EADA'];
+const FLUX    = ['#1E2350','#2C5F8A','#3E9184','#93B85E','#F2E06B'];
+const TIER    = ['#1F4E79','#3C8DAE','#84BFCF','#D3E4E8'];
+const CLASS   = ['#9A8C7A','#7A8899','#C05A5A','#E0A33E','#5D9B6B','#6F5FA8','#E0457B','#A0A6AD'];
+
+function ramp256(stops){
+  const out = new Array(256), n = stops.length - 1;
+  const rgb = stops.map(h => [parseInt(h.slice(1,3),16), parseInt(h.slice(3,5),16), parseInt(h.slice(5,7),16)]);
+  for (let i = 0; i < 256; i++){
+    const t = i / 255 * n, k = Math.min(n - 1, Math.floor(t)), f = t - k;
+    const a = rgb[k], b = rgb[k+1];
+    out[i] = 'rgb(' + Math.round(a[0]+(b[0]-a[0])*f) + ',' +
+                      Math.round(a[1]+(b[1]-a[1])*f) + ',' +
+                      Math.round(a[2]+(b[2]-a[2])*f) + ')';
+  }
+  return out;
+}
+const R_TERRAIN = ramp256(TERRAIN), R_FLUX = ramp256(FLUX);
+
+/* the surf-plot ramp: low ground magenta, the datum blue, everything that
+   stands up warm. deliberately the loud one -- on a shaded relief the eye
+   needs the hue to carry height, and the shading carries the form. */
+const SPECTRAL = ramp256(['#7A1E8C','#2A2FB4','#0B7FD6','#0FC3B4','#57D63A',
+                          '#CFE01C','#FFA51C','#E32A1C']);
+const NSH = 14;
+function shadeRamp(cols){
+  const rgb = cols.map(toRGB), out = new Array(cols.length*NSH);
+  for (let c = 0; c < cols.length; c++)
+    for (let q = 0; q < NSH; q++){
+      const f = .42 + .70*(q/(NSH-1));
+      out[c*NSH+q] = 'rgb(' + Math.min(255, rgb[c][0]*f|0) + ',' +
+                              Math.min(255, rgb[c][1]*f|0) + ',' +
+                              Math.min(255, rgb[c][2]*f|0) + ')';
+    }
+  return out;
+}
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+/* ------------------------------------------------------------ layers */
+function pct(arr, p, s){
+  const k = Math.max(1, Math.floor(arr.length / 6000)), v = [];
+  for (let i = 0; i < arr.length; i += k) v.push(arr[i] * s);
+  v.sort((a,b) => a-b);
+  return v[Math.min(v.length-1, Math.floor(p * (v.length-1)))];
+}
+const LAYERS = [
+  {id:'lvl',  label:'Cell size',       kind:'tier'},
+  {id:'cls',  label:'Class',           kind:'cat'},
+  {id:'trav', label:'Drivable',        kind:'bin'},
+  {id:'zg',   label:'Ground height',   kind:'ramp', ramp:R_TERRAIN, arr:zg,  s:.001, unit:' m'},
+  {id:'zmax', label:'Surface height',  kind:'ramp', ramp:R_TERRAIN, arr:zmx, s:.001, unit:' m'},
+  {id:'obsh', label:'Obstacle height', kind:'ramp', ramp:R_FLUX, arr:obs, s:.001, unit:' m', lo:0},
+  {id:'clear',label:'Clearance',       kind:'ramp', ramp:R_FLUX, arr:clr, s:.001, unit:' m', lo:0, hi:6},
+  {id:'rough',label:'Roughness',       kind:'ramp', ramp:R_FLUX, arr:rgh, s:.001, unit:' m', lo:0, hi:.10},
+  {id:'n',    label:'Points per cell', kind:'ramp', ramp:R_FLUX, arr:npt, s:1, unit:'', log:true, lo:1}
+];
+for (const L of LAYERS){
+  if (L.kind !== 'ramp') continue;
+  if (L.lo == null) L.lo = pct(L.arr, .02, L.s);
+  if (L.hi == null) L.hi = pct(L.arr, .98, L.s);
+  if (L.hi <= L.lo) L.hi = L.lo + 1;
+}
+const LNOTE = {
+  lvl:'the whole point', cls:'8 classes', trav:M.travpct + '%',
+  zg:'raster', zmax:'z max', obsh:'z max &minus; ground',
+  clear:'2.5D pays off', rough:'ground only', n:'confidence'
+};
+
+let layer = LAYERS[0];
+const colIdx = new Uint8Array(N);
+let order = new Int32Array(N), pal = TIER, palA = TIER, palB = TIER;
+
+function toRGB(s){
+  s = s.trim();
+  if (s[0] === '#'){
+    if (s.length === 4) s = '#'+s[1]+s[1]+s[2]+s[2]+s[3]+s[3];
+    return [parseInt(s.slice(1,3),16), parseInt(s.slice(3,5),16), parseInt(s.slice(5,7),16)];
+  }
+  const m = s.match(/[\d.]+/g);
+  return [+m[0], +m[1], +m[2]];
+}
+function shades(cols){
+  const rgb = cols.map(toRGB), f = k => rgb.map(c =>
+    'rgb(' + (c[0]*k|0) + ',' + (c[1]*k|0) + ',' + (c[2]*k|0) + ')');
+  return [f(1), f(.74), f(.55)];
+}
+
+function recolour(){
+  const L = layer;
+  if (L.kind === 'tier'){ pal = TIER; for (let i=0;i<N;i++) colIdx[i] = lvl[i]; }
+  else if (L.kind === 'cat'){ pal = CLASS; for (let i=0;i<N;i++) colIdx[i] = cls[i]; }
+  else if (L.kind === 'bin'){ pal = [css('--no'), css('--ok')]; for (let i=0;i<N;i++) colIdx[i] = trv[i]; }
+  else {
+    pal = L.ramp;
+    const a = L.arr, s = L.s, lo = L.lo, hi = L.hi;
+    const f = L.log ? (v => Math.log(Math.max(v,lo)) ) : (v => v);
+    const flo = f(lo), fhi = f(hi) - f(lo) || 1;
+    for (let i = 0; i < N; i++){
+      let t = (f(a[i]*s) - flo) / fhi;
+      colIdx[i] = t <= 0 ? 0 : t >= 1 ? 255 : (t * 255) | 0;
+    }
+  }
+  const nb = pal.length, cnt = new Int32Array(nb + 1);
+  for (let i = 0; i < N; i++) cnt[colIdx[i] + 1]++;
+  for (let b = 0; b < nb; b++) cnt[b+1] += cnt[b];
+  for (let i = 0; i < N; i++) order[cnt[colIdx[i]]++] = i;
+  [pal, palA, palB] = shades(pal);
+  buildLegend();
+}
+
+/* ------------------------------------------------------------- view */
+const view = {x:0, y:0, ppm:4};
+const ob = {az:3.90, el:.42, S:14, px0:0, py0:0, vex:2};
+let mode = 'surface';
+const is3d = () => mode !== 'plan';
+const zorder = new Int32Array(N), dbuf = new Float32Array(N), zcnt = new Int32Array(2049);
+let zaz = null;
+
+/* depth order for the painter's algorithm. only the azimuth changes it, so
+   this runs on rotate, not on every frame. counting sort, O(n). */
+function zsort(){
+  const ca = Math.cos(ob.az), sa = Math.sin(ob.az);
+  let lo = 1e9, hi = -1e9;
+  for (let i = 0; i < N; i++){
+    const v = cx[i]*U*ca + cy[i]*U*sa;
+    dbuf[i] = v; if (v < lo) lo = v; if (v > hi) hi = v;
+  }
+  const k = 2047 / (hi - lo || 1);
+  zcnt.fill(0);
+  for (let i = 0; i < N; i++) zcnt[(((dbuf[i]-lo)*k)|0) + 1]++;
+  for (let b = 0; b < 2048; b++) zcnt[b+1] += zcnt[b];
+  for (let i = 0; i < N; i++) zorder[zcnt[((dbuf[i]-lo)*k)|0]++] = i;
+  zaz = ob.az;
+}
+const opt = {outline:true, points:false, rings:true};
+let hover = -1, rowY = 0;
+
+const planC = document.getElementById('plan'), sectC = document.getElementById('sect');
+const pctx = planC.getContext('2d'), sctx = sectC.getContext('2d');
+let PW=0, PH=0, SW=0, SH=0, dpr=1;
+
+function fit(){
+  const r = planC.parentElement.getBoundingClientRect();
+  view.x = 0; view.y = 0;
+  view.ppm = Math.min(r.width / 200, r.height / 42);
+}
+function home(){
+  view.x = 7; view.y = 0; rowY = 0;
+  view.ppm = planC.parentElement.getBoundingClientRect().width / 32;
+}
+function sizeCanvas(c, ctx){
+  const r = c.parentElement.getBoundingClientRect();
+  dpr = Math.min(2, window.devicePixelRatio || 1);
+  c.width = Math.max(1, Math.round(r.width * dpr));
+  c.height = Math.max(1, Math.round(r.height * dpr));
+  return [r.width, r.height];
+}
+function resize(){
+  [PW, PH] = sizeCanvas(planC, pctx);
+  [SW, SH] = sizeCanvas(sectC, sctx);
+  draw();
+}
+
+const sx = X => (X - view.x) * view.ppm + PW/2;
+const sy = Y => PH/2 - (Y - view.y) * view.ppm;
+const wx = px => (px - PW/2) / view.ppm + view.x;
+const wy = py => view.y - (py - PH/2) / view.ppm;
+
+/* -------------------------------------------------------- plan draw */
+function drawPlan(){
+  const g = pctx;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle = css('--stage'); g.fillRect(0,0,PW,PH);
+
+  if (opt.rings){
+    g.save();
+    g.strokeStyle = css('--rule'); g.setLineDash([3,4]); g.lineWidth = 1;
+    g.font = '10px "IBM Plex Mono", monospace'; g.fillStyle = css('--ink3');
+    for (const r of [10,25,50,100]){
+      g.beginPath(); g.arc(sx(0), sy(0), r*view.ppm, 0, 6.2832); g.stroke();
+      if (r*view.ppm > 24) g.fillText(r + ' m', sx(0) + 3, sy(0) - r*view.ppm - 3);
+    }
+    g.restore();
+  }
+
+  const x0 = wx(0)-1, x1 = wx(PW)+1, y1 = wy(0)+1, y0 = wy(PH)-1;
+  let cur = -1;
+  for (let k = 0; k < N; k++){
+    const i = order[k];
+    const X = cx[i]*U, Y = cy[i]*U;
+    if (X < x0 || X > x1 || Y < y0 || Y > y1) continue;
+    const c = colIdx[i];
+    if (c !== cur){ cur = c; g.fillStyle = pal[c]; }
+    const h = RES[i]/2;
+    const l = Math.round(sx(X-h)), rr = Math.round(sx(X+h));
+    const t = Math.round(sy(Y+h)), b = Math.round(sy(Y-h));
+    g.fillRect(l, t, Math.max(1, rr-l), Math.max(1, b-t));
+  }
+
+  if (opt.outline && view.ppm * M.res0 > 3.2){
+    g.strokeStyle = css('--rule'); g.lineWidth = 1; g.globalAlpha = .8;
+    g.beginPath();
+    for (let i = 0; i < N; i++){
+      const X = cx[i]*U, Y = cy[i]*U;
+      if (X < x0 || X > x1 || Y < y0 || Y > y1) continue;
+      const h = RES[i]/2;
+      const l = Math.round(sx(X-h)) + .5, t = Math.round(sy(Y+h)) + .5;
+      g.rect(l, t, Math.round(sx(X+h)) - l, Math.round(sy(Y-h)) - t);
+    }
+    g.stroke(); g.globalAlpha = 1;
+  }
+
+  if (opt.points){
+    g.globalAlpha = .55;
+    const st = NP > 60000 && view.ppm < 6 ? 2 : 1;
+    for (let i = 0; i < NP; i += st){
+      const X = pX[i]/100, Y = pY[i]/100;
+      if (X < x0 || X > x1 || Y < y0 || Y > y1) continue;
+      g.fillStyle = CLASS[pL[i]];
+      g.fillRect(sx(X)|0, sy(Y)|0, 1, 1);
+    }
+    g.globalAlpha = 1;
+  }
+
+  /* section cursor */
+  g.strokeStyle = css('--mark'); g.lineWidth = 1; g.setLineDash([5,4]); g.globalAlpha = .7;
+  g.beginPath(); g.moveTo(0, sy(rowY)); g.lineTo(PW, sy(rowY)); g.stroke();
+  g.setLineDash([]); g.globalAlpha = 1;
+
+  /* sensor origin */
+  const ox = sx(0), oy = sy(0);
+  g.strokeStyle = css('--mark'); g.lineWidth = 1.5;
+  g.beginPath();
+  g.moveTo(ox-7, oy); g.lineTo(ox+7, oy); g.moveTo(ox, oy-7); g.lineTo(ox, oy+7);
+  g.stroke();
+  g.beginPath(); g.arc(ox, oy, 3.5, 0, 6.2832); g.stroke();
+
+  if (hover >= 0){
+    const h = RES[hover]/2, X = cx[hover]*U, Y = cy[hover]*U;
+    g.strokeStyle = css('--mark'); g.lineWidth = 2;
+    g.strokeRect(sx(X-h)-1, sy(Y+h)-1, Math.max(4, RES[hover]*view.ppm+2), Math.max(4, RES[hover]*view.ppm+2));
+  }
+  document.getElementById('scaletag').textContent =
+    (view.ppm).toFixed(1) + ' px / m \u00b7 ' + (PW/view.ppm).toFixed(0) + ' m across';
+}
+
+/* ----------------------------------------------------- surface draw */
+let SP_SH = null, CLS_SH = null, TRV_SH = null;
+function surfacePalettes(){
+  SP_SH = shadeRamp(SPECTRAL);
+  CLS_SH = shadeRamp(CLASS);
+  TRV_SH = shadeRamp([css('--no'), css('--ok')]);
+}
+
+function drawSurface(){
+  const g = pctx;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle = css('--stage'); g.fillRect(0,0,PW,PH);
+  if (!SP_SH) surfacePalettes();
+
+  const B = obBasis(ob.S), S = ob.S;
+  const ux = B.ux, uy = B.uy, vx = B.vx, vy = B.vy, vz = B.vz;
+  const X0 = ob.px0, Y0 = ob.py0;
+  const L0 = -70, L1 = PW+70, T0 = -70, T1 = PH+70;
+  /* ONE stride, shared by every tier. per-tier strides would drive all four
+     to the same displayed size at any zoom that fits the scene, which hides
+     the exact thing this view exists to show. with a shared stride the 2:1
+     ratio between tiers survives at every zoom, and since the stride is a
+     power of two the mesh is always an exact coarsening of the real grid,
+     never a resample of it. */
+  const budget = drag ? 20000 : 46000;
+  let k = 1, qn = 0;
+  while (M.res0*k*S < (drag ? 1.6 : .7)) k <<= 1;
+  for (;;){
+    qn = 0;
+    for (let t = 0; t < 4; t++){
+      KS[t] = k;
+      const T = TS[t];
+      if (k >= T.nx || k >= T.ny) continue;
+      const A = T[srf.src], nxT = T.nx;
+      const rin = t ? T.rin - T.res*k*1.5 : -1, rout = T.rout;
+      for (let j = 0; j + k < T.ny; j += k){
+        const Y = T.y0 + (j + k*.5)*T.res;
+        for (let i = 0; i + k < nxT; i += k){
+          const X = T.x0 + (i + k*.5)*T.res;
+          const r = Math.hypot(X, Y);
+          if (r < rin || r >= rout) continue;
+          if (!(T.flag[j*nxT+i] & 4)) continue;   // no ground return near here
+          const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + A[j*nxT+i]*.001*vz + Y0;
+          if (a < L0 || a > L1 || b < T0 || b > T1) continue;
+          if (qn >= QMAX) break;
+          qkey[qn] = (t << 28) | (i << 14) | j;
+          qdep[qn++] = X*B.ca + Y*B.sa;
+        }
+      }
+    }
+    if (qn <= budget || k >= 64) break;
+    k <<= 1;
+  }
+
+  /* back to front across all four tiers at once. sorting each tier on its
+     own is wrong: the annuli interleave in depth, a near cell of one tier
+     sits in front of a far cell of another. */
+  let lo = 1e30, hi = -1e30;
+  for (let q = 0; q < qn; q++){ const d = qdep[q]; if (d < lo) lo = d; if (d > hi) hi = d; }
+  const NB = 1024, sc = (NB-1)/(hi-lo || 1);
+  qcnt.fill(0);
+  for (let q = 0; q < qn; q++) qcnt[(((qdep[q]-lo)*sc)|0) + 1]++;
+  for (let bI = 0; bI < NB; bI++) qcnt[bI+1] += qcnt[bI];
+  for (let q = 0; q < qn; q++) qord[qcnt[((qdep[q]-lo)*sc)|0]++] = q;
+
+  const LX = -.42, LY = -.34, LZ = .84;
+  const zr = zrange(), zlo = zr[0], zspan = (zr[1] - zr[0]) || 1;
+  const pk = srf.paint;
+  const PALS = pk === 'height' ? SP_SH : pk === 'cls' ? CLS_SH : TRV_SH;
+  const mesh = srf.mesh, mcol = css('--ink');
+  let cur = -1, drawn = 0;
+  g.lineWidth = .6; g.strokeStyle = mcol;
+
+  for (let o = 0; o < qn; o++){
+    const key = qkey[qord[o]];
+    const t = key >>> 28, i = (key >>> 14) & 0x3fff, j = key & 0x3fff;
+    const T = TS[t], k = KS[t], nx = T.nx, A = T[srf.src];
+    const p0 = j*nx+i, p1 = p0+k, p2 = p0+k*nx+k, p3 = p0+k*nx;
+    const h0 = A[p0]*.001, h1 = A[p1]*.001, h2 = A[p2]*.001, h3 = A[p3]*.001;
+    const d = k*T.res;
+    const X = T.x0 + i*T.res, Y = T.y0 + j*T.res;
+    const ax = X*ux + Y*uy + X0, ay = X*vx + Y*vy + Y0;
+    const dux = d*ux, duy = d*uy, dvx = d*vx, dvy = d*vy;
+
+    /* flat-shade from the quad's own gradient. this is what turns a height
+       field into something the eye reads as a surface. */
+    const gx = ((h1+h2) - (h0+h3))*.5/d*ob.vex;
+    const gy = ((h3+h2) - (h0+h1))*.5/d*ob.vex;
+    const inv = 1/Math.sqrt(gx*gx + gy*gy + 1);
+    let nl = (-gx*LX - gy*LY + LZ)*inv;
+    if (nl < 0) nl = 0;
+    const sh = (.12 + .88*nl)*(NSH-1) | 0;
+
+    let ci;
+    if (pk === 'height'){
+      let u = ((h0+h1+h2+h3)*.25 - zlo)/zspan;
+      ci = u <= 0 ? 0 : u >= 1 ? 255 : (u*255)|0;
+    } else if (pk === 'cls') ci = T.cls[p0];
+    else ci = (T.flag[p0] >> 1) & 1;
+
+    const idx = ci*NSH + sh;
+    if (idx !== cur){ cur = idx; g.fillStyle = PALS[idx]; }
+    g.beginPath();
+    g.moveTo(ax, ay + h0*vz);
+    g.lineTo(ax+dux, ay+dvx + h1*vz);
+    g.lineTo(ax+dux+duy, ay+dvx+dvy + h2*vz);
+    g.lineTo(ax+duy, ay+dvy + h3*vz);
+    g.closePath();
+    g.fill();
+    if (mesh && d*S > 5.5) g.stroke();
+    drawn++;
+  }
+
+  if (opt.rings){
+    g.strokeStyle = css('--mark'); g.globalAlpha = .5;
+    g.setLineDash([4,4]); g.lineWidth = 1;
+    for (const r of [10,25,50]){
+      g.beginPath();
+      for (let q = 0; q <= 96; q++){
+        const w = q/96*6.2832, X = r*Math.cos(w), Y = r*Math.sin(w);
+        const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + 0*vz + Y0;
+        q ? g.lineTo(a,b) : g.moveTo(a,b);
+      }
+      g.stroke();
+    }
+    g.setLineDash([]); g.globalAlpha = 1;
+  }
+
+  document.getElementById('scaletag').textContent =
+    'azimuth ' + (((ob.az*180/Math.PI)%360+360)%360).toFixed(0) + '\u00b0 \u00b7 elevation ' +
+    (ob.el*180/Math.PI).toFixed(0) + '\u00b0 \u00b7 height \u00d7' + ob.vex + ' \u00b7 ' +
+    [0,1,2,3].map(t => (TS[t].res*KS[t]*100).toFixed(0)).join(' / ') + ' cm mesh \u00b7 ' +
+    drawn.toLocaleString('en-US') + ' quads';
+}
+
+/* ----------------------------------------------------- oblique draw */
+/* axonometric: rotate the world by the camera azimuth, tilt by its
+   elevation, drop the depth axis. every cell becomes a tile at its ground
+   height; anything standing on it becomes a prism hung from its lowest
+   non-ground return. that second surface is the whole of the .5 in 2.5D. */
+function obBasis(S){
+  const ca = Math.cos(ob.az), sa = Math.sin(ob.az),
+        ce = Math.cos(ob.el), se = Math.sin(ob.el);
+  return {ux:-sa*S, uy:ca*S, vx:se*ca*S, vy:se*sa*S, vz:-ce*S*ob.vex, ca:ca, sa:sa, ce:ce};
+}
+function obAnchor(X, Y, tx, ty){
+  const B = obBasis(ob.S);
+  ob.px0 = tx - (X*B.ux + Y*B.uy);
+  ob.py0 = ty - (X*B.vx + Y*B.vy);
+}
+function obfit(){
+  const B = obBasis(1);
+  let ax = 1e9, bx = -1e9, ay = 1e9, by = -1e9;
+  for (let i = 0; i < N; i += 7){
+    const X = cx[i]*U, Y = cy[i]*U;
+    const a = X*B.ux + Y*B.uy;
+    const flat = mode === 'surface' && srf.src === 'zgnd';
+    const b0 = X*B.vx + Y*B.vy + zg[i]*.001*B.vz;
+    const b1 = flat ? b0 : X*B.vx + Y*B.vy + zmx[i]*.001*B.vz;
+    if (a < ax) ax = a; if (a > bx) bx = a;
+    if (b1 < ay) ay = b1; if (b0 > by) by = b0;
+  }
+  ob.S = Math.min(PW*.92/(bx-ax || 1), PH*.92/(by-ay || 1));
+  ob.px0 = PW/2 - (ax+bx)/2*ob.S;
+  ob.py0 = PH/2 - (ay+by)/2*ob.S;
+}
+
+function drawOblique(){
+  const g = pctx;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle = css('--stage'); g.fillRect(0,0,PW,PH);
+  if (zaz !== ob.az) zsort();
+
+  const B = obBasis(ob.S), S = ob.S;
+  const ux = B.ux, uy = B.uy, vx = B.vx, vy = B.vy, vz = B.vz;
+  const X0 = ob.px0, Y0 = ob.py0;
+
+  const OFF = [];
+  for (let L = 0; L < 4; L++){
+    const h = M.res0*(1<<L)/2;
+    OFF.push([[-h*ux-h*uy, -h*vx-h*vy], [h*ux-h*uy, h*vx-h*vy],
+              [ h*ux+h*uy,  h*vx+h*vy], [-h*ux+h*uy, -h*vx+h*vy]]);
+  }
+
+  if (opt.rings){
+    g.strokeStyle = css('--rule'); g.setLineDash([3,4]); g.lineWidth = 1;
+    for (const r of [10,25,50,100]){
+      g.beginPath();
+      for (let t = 0; t <= 72; t++){
+        const q = t/72*6.2832, X = r*Math.cos(q), Y = r*Math.sin(q);
+        const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + Y0;
+        t ? g.lineTo(a,b) : g.moveTo(a,b);
+      }
+      g.stroke();
+    }
+    g.setLineDash([]);
+  }
+
+  const st = drag ? 2 : 1;
+  const L0 = -60, L1 = PW+60, T0 = -60, T1 = PH+60;
+  hover = mode === 'oblique' ? hover : -1;
+
+  /* the terrain. sub-pixel tiles go through fillRect, which is far cheaper
+     than a path; larger ones are batched 64 to a fill -- one giant path is
+     not faster, the rasteriser chokes on it. */
+  let cur = -1, nq = 0, nt = 0;
+  g.beginPath();
+  for (let k = 0; k < N; k += st){
+    const i = order[k], X = cx[i]*U, Y = cy[i]*U;
+    const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + zg[i]*.001*vz + Y0;
+    if (a < L0 || a > L1 || b < T0 || b > T1) continue;
+    const c = colIdx[i];
+    if (c !== cur){
+      if (nq){ g.fill(); nq = 0; }
+      g.beginPath(); cur = c; g.fillStyle = pal[c];
+    }
+    nt++;
+    const sz = RES[i]*S;
+    if (sz < 1.7){ g.fillRect(a-.85, b-.85, 1.8, 1.8); continue; }
+    const o = OFF[lvl[i]];
+    g.moveTo(a+o[0][0], b+o[0][1]); g.lineTo(a+o[1][0], b+o[1][1]);
+    g.lineTo(a+o[2][0], b+o[2][1]); g.lineTo(a+o[3][0], b+o[3][1]);
+    g.closePath();
+    if (++nq >= 64){ g.fill(); nq = 0; g.beginPath(); }
+  }
+  if (nq) g.fill();
+
+  if (opt.outline && M.res0*S > 4){
+    g.strokeStyle = css('--rule'); g.lineWidth = 1; g.globalAlpha = .75;
+    g.beginPath();
+    for (let k = 0; k < N; k += st){
+      const i = order[k], X = cx[i]*U, Y = cy[i]*U;
+      const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + zg[i]*.001*vz + Y0;
+      if (a < L0 || a > L1 || b < T0 || b > T1) continue;
+      const o = OFF[lvl[i]];
+      g.moveTo(a+o[0][0], b+o[0][1]); g.lineTo(a+o[1][0], b+o[1][1]);
+      g.lineTo(a+o[2][0], b+o[2][1]); g.lineTo(a+o[3][0], b+o[3][1]); g.closePath();
+    }
+    g.stroke(); g.globalAlpha = 1;
+  }
+
+  /* things that stand up, back to front so they occlude correctly */
+  const ex = B.ca > 0 ? [1,2] : [3,0];
+  const ey = B.sa > 0 ? [2,3] : [0,1];
+  for (let k = 0; k < N; k += st){
+    const i = zorder[k];
+    if (clr[i] >= 29000) continue;
+    const base = zg[i]*.001 + Math.max(0, clr[i]*.001), top = zmx[i]*.001;
+    if (top - base < .05) continue;
+    const X = cx[i]*U, Y = cy[i]*U;
+    const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + top*vz + Y0;
+    if (a < L0 || a > L1 || b < T0 || b > T1 + 400) continue;
+    const dn = (top-base)*B.ce*S*ob.vex, o = OFF[lvl[i]], c = colIdx[i];
+    if (dn > 1.5){
+      g.fillStyle = palA[c];
+      g.beginPath();
+      g.moveTo(a+o[ex[0]][0], b+o[ex[0]][1]); g.lineTo(a+o[ex[1]][0], b+o[ex[1]][1]);
+      g.lineTo(a+o[ex[1]][0], b+o[ex[1]][1]+dn); g.lineTo(a+o[ex[0]][0], b+o[ex[0]][1]+dn);
+      g.fill();
+      g.fillStyle = palB[c];
+      g.beginPath();
+      g.moveTo(a+o[ey[0]][0], b+o[ey[0]][1]); g.lineTo(a+o[ey[1]][0], b+o[ey[1]][1]);
+      g.lineTo(a+o[ey[1]][0], b+o[ey[1]][1]+dn); g.lineTo(a+o[ey[0]][0], b+o[ey[0]][1]+dn);
+      g.fill();
+    }
+    g.fillStyle = pal[c];
+    const sz = RES[i]*S;
+    if (sz < 1.7){ g.fillRect(a-.85, b-.85, 1.8, 1.8); continue; }
+    g.beginPath();
+    g.moveTo(a+o[0][0], b+o[0][1]); g.lineTo(a+o[1][0], b+o[1][1]);
+    g.lineTo(a+o[2][0], b+o[2][1]); g.lineTo(a+o[3][0], b+o[3][1]);
+    g.fill();
+  }
+
+  if (opt.points){
+    g.globalAlpha = .5;
+    let pc = -1;
+    for (let i = 0; i < NP; i += st){
+      const X = pX[i]/100, Y = pY[i]/100;
+      const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + pZ[i]*.01*vz + Y0;
+      if (a < L0 || a > L1 || b < T0 || b > T1) continue;
+      if (pL[i] !== pc){ pc = pL[i]; g.fillStyle = CLASS[pc]; }
+      g.fillRect(a, b, 1.4, 1.4);
+    }
+    g.globalAlpha = 1;
+  }
+
+  if (hover >= 0){
+    const X = cx[hover]*U, Y = cy[hover]*U;
+    const a = X*ux + Y*uy + X0, b = X*vx + Y*vy + zg[hover]*.001*vz + Y0;
+    const o = OFF[lvl[hover]];
+    g.strokeStyle = css('--mark'); g.lineWidth = 2;
+    g.beginPath();
+    g.moveTo(a+o[0][0], b+o[0][1]); g.lineTo(a+o[1][0], b+o[1][1]);
+    g.lineTo(a+o[2][0], b+o[2][1]); g.lineTo(a+o[3][0], b+o[3][1]); g.closePath();
+    g.stroke();
+  }
+
+  /* the sensor, and the roof height it has to fit under */
+  const oa = X0, obY = Y0;
+  g.strokeStyle = css('--mark'); g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(oa, obY); g.lineTo(oa, obY + 2.2*vz); g.stroke();
+  g.beginPath(); g.arc(oa, obY, 3.5, 0, 6.2832); g.stroke();
+
+  document.getElementById('scaletag').textContent =
+    'azimuth ' + (((ob.az*180/Math.PI)%360+360)%360).toFixed(0) + '\u00b0 \u00b7 elevation ' +
+    (ob.el*180/Math.PI).toFixed(0) + '\u00b0 \u00b7 height \u00d7' + ob.vex +
+    ' \u00b7 ' + nt.toLocaleString('en-US') + ' tiles drawn';
+}
+
+/* ----------------------------------------------------- section draw */
+function drawSect(){
+  const g = sctx;
+  g.setTransform(dpr,0,0,dpr,0,0);
+  g.fillStyle = css('--stage'); g.fillRect(0,0,SW,SH);
+
+  const x0 = wx(0)-1, x1 = wx(PW)+1;
+  const row = [];
+  let zlo = 1e9, zhi = -1e9;
+  for (let i = 0; i < N; i++){
+    const Y = cy[i]*U, h = RES[i]/2, X = cx[i]*U;
+    if (rowY < Y-h || rowY >= Y+h || X < x0 || X > x1) continue;
+    row.push(i);
+    const a = zg[i]*.001, b = zmx[i]*.001;
+    if (a < zlo) zlo = a; if (b > zhi) zhi = b;
+  }
+  if (!row.length){ zlo = -1; zhi = 4; }
+  zlo = Math.floor(zlo - .4); zhi = Math.min(zlo + 12, Math.max(zhi + .5, zlo + 3.2));
+  const pps = (SH - 18) / (zhi - zlo);
+  const sz = Z => SH - 10 - (Z - zlo) * pps;
+
+  g.font = '9.5px "IBM Plex Mono", monospace';
+  g.strokeStyle = css('--rule2'); g.fillStyle = css('--ink3'); g.lineWidth = 1;
+  const stepM = zhi - zlo > 7 ? 2 : 1;
+  for (let z = Math.ceil(zlo); z <= zhi; z += stepM){
+    const py = Math.round(sz(z)) + .5;
+    g.beginPath(); g.moveTo(0, py); g.lineTo(SW, py); g.stroke();
+    g.fillText(z + ' m', 4, py - 3);
+  }
+
+  if (opt.points){
+    g.globalAlpha = .5;
+    for (let i = 0; i < NP; i++){
+      const Y = pY[i]/100;
+      if (Y < rowY - .18 || Y > rowY + .18) continue;
+      const X = pX[i]/100;
+      if (X < x0 || X > x1) continue;
+      g.fillStyle = CLASS[pL[i]];
+      g.fillRect(sx(X)|0, sz(pZ[i]/100)|0, 1.5, 1.5);
+    }
+    g.globalAlpha = 1;
+  }
+
+  row.sort((a,b) => cx[a] - cx[b]);
+
+  /* a solid band on the ground, tinted by the active layer, so the section
+     and the plan view read as the same map */
+  let cur = -1;
+  for (const i of row){
+    const c = colIdx[i];
+    if (c !== cur){ cur = c; g.fillStyle = pal[c]; }
+    const X = cx[i]*U, h = RES[i]/2;
+    const l = Math.round(sx(X-h)), w = Math.max(1, Math.round(sx(X+h)) - l);
+    g.fillRect(l, Math.round(sz(zg[i]*.001)), w, 4);
+  }
+
+  /* obstacles hang from their LOWEST non-ground return, not from the ground.
+     an overhang has to float here or the picture asserts the opposite of
+     what the clearance field says. */
+  g.globalAlpha = .9; cur = -1;
+  for (const i of row){
+    if (clr[i] >= 29000) continue;
+    const base = zg[i]*.001 + Math.max(0, clr[i]*.001), top = zmx[i]*.001;
+    if (top - base < .04) continue;
+    const c = colIdx[i];
+    if (c !== cur){ cur = c; g.fillStyle = pal[c]; }
+    const X = cx[i]*U, h = RES[i]/2;
+    const l = Math.round(sx(X-h)), w = Math.max(1, Math.round(sx(X+h)) - l);
+    g.fillRect(l, Math.round(sz(top)), w, Math.max(1, Math.round(sz(base)) - Math.round(sz(top))));
+  }
+  g.globalAlpha = 1;
+
+  /* the ground surface, and the roof the vehicle needs clear */
+  g.strokeStyle = css('--ink'); g.lineWidth = 1.5;
+  g.beginPath();
+  row.forEach((i, k) => { const X = cx[i]*U, y = sz(zg[i]*.001);
+    k ? g.lineTo(sx(X), y) : g.moveTo(sx(X), y); });
+  g.stroke();
+
+  g.strokeStyle = css('--mark'); g.lineWidth = 1; g.setLineDash([4,3]); g.globalAlpha = .8;
+  g.beginPath();
+  row.forEach((i, k) => { const X = cx[i]*U, y = sz(zg[i]*.001 + 2.2);
+    k ? g.lineTo(sx(X), y) : g.moveTo(sx(X), y); });
+  g.stroke(); g.setLineDash([]); g.globalAlpha = 1;
+
+  if (hover >= 0 && row.indexOf(hover) >= 0){
+    const X = cx[hover]*U, h = RES[hover]/2;
+    g.strokeStyle = css('--mark'); g.lineWidth = 2;
+    g.strokeRect(sx(X-h)-1, sz(zmx[hover]*.001)-1,
+                 Math.max(4, RES[hover]*view.ppm+2),
+                 Math.max(3, sz(zg[hover]*.001) - sz(zmx[hover]*.001) + 2));
+  }
+  document.getElementById('secttag').textContent =
+    'y = ' + rowY.toFixed(2) + ' m \u00b7 ' + row.length + ' cells \u00b7 dashed = 2.2 m vehicle roof';
+}
+
+let pending = false;
+function draw(){ if (pending) return; pending = true;
+  requestAnimationFrame(() => { pending = false;
+    if (mode === 'surface') drawSurface();
+    else if (mode === 'oblique') drawOblique();
+    else { drawPlan(); drawSect(); } }); }
+
+/* ------------------------------------------------------ cell lookup */
+const buckets = new Map();
+for (let i = 0; i < N; i++){
+  const k = (Math.floor(cx[i]*U) + 200) * 1000 + (Math.floor(cy[i]*U) + 200);
+  let a = buckets.get(k); if (!a) buckets.set(k, a = []);
+  a.push(i);
+}
+function pick(X, Y){
+  const bx = Math.floor(X), by = Math.floor(Y);
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++){
+    const a = buckets.get((bx+dx+200)*1000 + (by+dy+200));
+    if (!a) continue;
+    for (const i of a){
+      const h = RES[i]/2;
+      if (Math.abs(X - cx[i]*U) < h && Math.abs(Y - cy[i]*U) < h) return i;
+    }
+  }
+  return -1;
+}
+
+function obPick(mx, my){
+  const B = obBasis(ob.S), det = B.ux*B.vy - B.uy*B.vx;
+  if (!det) return -1;
+  let Z = 0, i = -1;
+  for (let it = 0; it < 3; it++){
+    const a = mx - ob.px0, b = my - ob.py0 - Z*B.vz;
+    const X = (a*B.vy - B.uy*b)/det, Y = (B.ux*b - B.vx*a)/det;
+    i = pick(X, Y);
+    if (i < 0) return -1;
+    const z2 = zg[i]*.001;
+    if (Math.abs(z2 - Z) < .01) break;
+    Z = z2;
+  }
+  return i;
+}
+
+/* ------------------------------------------------------------- rail */
+const el = id => document.getElementById(id);
+const fmt = n => n.toLocaleString('en-US');
+
+if (M.source) el('src').textContent =
+  M.source + ' \u2014 3D sweep \u2192 variable-resolution 2.5D elevation map';
+el('s1').textContent = fmt(M.npts);
+el('s2').textContent = fmt(M.fine);
+el('s3').textContent = fmt(M.adaptive);
+el('s4').textContent = M.ms.toFixed(0) + ' ms';
+el('s5').textContent = (1000/M.ms).toFixed(0) + ' Hz \u00b7 ' + M.maxrange + ' m range';
+
+el('mem').innerHTML = [
+  ['uniform 5 cm 2.5D', fmt(M.uniform), ''],
+  ['occupied only',     fmt(M.fine),     (M.uniform/M.fine).toFixed(0) + '\u00d7'],
+  ['adaptive (this)',   fmt(M.adaptive), (M.fine/M.adaptive).toFixed(2) + '\u00d7'],
+  ['combined',          '',              (M.uniform/M.adaptive).toFixed(0) + '\u00d7']
+].map(r => '<tr><td>'+r[0]+'</td><td>'+r[1]+'</td><td>'+r[2]+'</td></tr>').join('');
+
+el('layers').innerHTML = LAYERS.map(L =>
+  '<button data-id="'+L.id+'" aria-pressed="false">'+L.label+'<em>'+(LNOTE[L.id]||'')+'</em></button>').join('');
+el('layers').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  layer = LAYERS.find(L => L.id === b.dataset.id);
+  [...el('layers').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  recolour(); draw();
+});
+
+const TOG = [['outline','Cell edges'], ['points','Raw points'], ['rings','Range rings']];
+el('toggles').innerHTML = TOG.map(t =>
+  '<button data-k="'+t[0]+'" aria-pressed="'+opt[t[0]]+'">'+t[1]+'</button>').join('');
+el('toggles').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  opt[b.dataset.k] = !opt[b.dataset.k];
+  b.setAttribute('aria-pressed', opt[b.dataset.k]); draw();
+});
+
+const MODES = [['surface','Surface'], ['oblique','Cells'], ['plan','Plan + section']];
+el('modes').innerHTML = MODES.map(m =>
+  '<button data-m="'+m[0]+'" aria-pressed="'+(mode===m[0])+'">'+m[1]+'</button>').join('');
+el('modes').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  mode = b.dataset.m;
+  [...el('modes').children].forEach(x => x.setAttribute('aria-pressed', x === b));
+  setMode();
+  requestAnimationFrame(resize);
+});
+
+function setMode(){
+  document.querySelector('.stack').classList.toggle('solo', is3d());
+  el('vex').hidden = !is3d();
+  el('srfbox').hidden = mode !== 'surface';
+  el('layers').closest('.sect').hidden = mode === 'surface';
+  el('toggles').closest('.sect').hidden = mode === 'surface';
+  planC.style.cursor = is3d() ? 'grab' : 'crosshair';
+  el('ptag').innerHTML =
+    mode === 'surface' ? 'Elevation surface \u2014 the foveated mesh, shaded'
+    : mode === 'oblique' ? 'Cells \u2014 ground tiles, with what stands on them'
+    : 'Plan view \u2014 looking down';
+  buildLegend();
+}
+
+const SRFC = [
+  ['srfsrc',   'src',   [['ztop','Top surface'], ['zgnd','Ground only']]],
+  ['srfpaint', 'paint', [['height','Height'], ['cls','Class'], ['trav','Drivable']]]
+];
+for (const [id, field, opts] of SRFC){
+  el(id).innerHTML = opts.map(o =>
+    '<button data-v="'+o[0]+'" aria-pressed="'+(srf[field]===o[0])+'">'+o[1]+'</button>').join('');
+  el(id).addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    srf[field] = b.dataset.v;
+    [...el(id).children].forEach(x => x.setAttribute('aria-pressed', x === b));
+    /* 8 m walls need no exaggeration; a 15 cm kerb needs plenty */
+    if (field === 'src'){
+      setVex(srf.src === 'ztop' ? 2 : 8);
+      goto(null);
+    }
+    buildLegend(); draw();
+  });
+}
+el('srfmesh').innerHTML =
+  '<button data-k="mesh" aria-pressed="true">Mesh lines</button>' +
+  '<button data-k="rings" aria-pressed="true">Range rings</button>';
+el('srfmesh').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.k === 'mesh') srf.mesh = !srf.mesh; else opt.rings = !opt.rings;
+  b.setAttribute('aria-pressed', b.dataset.k === 'mesh' ? srf.mesh : opt.rings);
+  draw();
+});
+
+el('vex').innerHTML = [1,2,4,8].map(v =>
+  '<button data-v="'+v+'" aria-pressed="'+(ob.vex===v)+'">height \u00d7'+v+'</button>').join('');
+function setVex(v){
+  const f = v / ob.vex; ob.vex = v;
+  ob.py0 = PH*.5 - (PH*.5 - ob.py0)*f;
+  [...el('vex').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.v === v));
+}
+el('vex').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  setVex(+b.dataset.v); draw();
+});
+
+const VIEWS = M.views || [['Whole scene', null]];
+el('presets').innerHTML = VIEWS.map((v,i) => '<button data-i="'+i+'">'+v[0]+'</button>').join('');
+function goto(v){
+  if (!v){ fit(); obfit(); return; }
+  view.x = v.x; view.y = v.y; view.ppm = PW / v.m; rowY = v.ry;
+  ob.S = PW / (v.m*2.2);
+  obAnchor(v.x, v.y, PW/2, PH*.62);
+}
+el('presets').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  goto(VIEWS[+b.dataset.i][1]); draw();
+});
+
+function buildLegend(){
+  const box = el('legend');
+  if (mode === 'surface'){
+    if (srf.paint === 'height'){
+      const st = [];
+      for (let i = 0; i <= 10; i++) st.push(SPECTRAL[Math.round(i/10*255)]);
+      box.innerHTML =
+        '<div class="bar" style="background:linear-gradient(90deg,'+st.join(',')+')"></div>' +
+        '<div class="ends"><span>'+zrange()[0].toFixed(2)+' m</span><span>' +
+        (srf.src === 'ztop' ? 'top of everything' : 'terrain only') +
+        '</span><span>'+zrange()[1].toFixed(2)+' m</span></div>';
+    } else if (srf.paint === 'cls'){
+      box.innerHTML = '<div class="keys">' + M.classes.map((nm,i) =>
+        '<div class="key"><i style="background:'+CLASS[i]+'"></i>'+nm+'</div>').join('') + '</div>';
+    } else {
+      box.innerHTML = '<div class="keys">' +
+        '<div class="key"><i style="background:'+css('--ok')+'"></i>drivable</div>' +
+        '<div class="key"><i style="background:'+css('--no')+'"></i>blocked or unobserved</div></div>';
+    }
+    return;
+  }
+  const L = layer;
+  if (L.kind === 'ramp'){
+    const stops = [];
+    for (let i = 0; i <= 10; i++) stops.push(L.ramp[Math.round(i/10*255)]);
+    const dec = L.id === 'n' ? 0 : 2;
+    box.innerHTML =
+      '<div class="bar" style="background:linear-gradient(90deg,'+stops.join(',')+')"></div>' +
+      '<div class="ends"><span>'+L.lo.toFixed(dec)+L.unit+'</span>' +
+      (L.log ? '<span>log scale</span>' : '') +
+      '<span>'+(L.id==='clear'?'\u2265':'')+L.hi.toFixed(dec)+L.unit+'</span></div>';
+  } else if (L.kind === 'tier'){
+    box.innerHTML = '<div class="keys">' + TIER.map((c,i) =>
+      '<div class="key"><i style="background:'+c+'"></i>'+(M.res0*(1<<i)*100).toFixed(0)+' cm'+
+      '<b>'+fmt(M.lvlcount[i])+'</b></div>').join('') + '</div>' +
+      '<div class="ends"><span>tier edges at '+M.bounds.join(' / ')+' m</span></div>';
+  } else if (L.kind === 'cat'){
+    box.innerHTML = '<div class="keys">' + M.classes.map((nm,i) =>
+      '<div class="key"><i style="background:'+CLASS[i]+'"></i>'+nm+
+      '<b>'+fmt(M.clscount[i])+'</b></div>').join('') + '</div>';
+  } else {
+    box.innerHTML = '<div class="keys">' +
+      '<div class="key"><i style="background:'+css('--ok')+'"></i>drivable<b>'+M.travpct+'%</b></div>' +
+      '<div class="key"><i style="background:'+css('--no')+'"></i>blocked or unknown<b>'+
+      (100-M.travpct).toFixed(1)+'%</b></div></div>';
+  }
+}
+
+const FIELDS = [
+  ['position',  i => (cx[i]*U).toFixed(2) + ', ' + (cy[i]*U).toFixed(2) + ' m'],
+  ['range',     i => Math.hypot(cx[i]*U, cy[i]*U).toFixed(1) + ' m'],
+  ['cell size', i => (RES[i]*100).toFixed(0) + ' cm  (tier ' + lvl[i] + ')'],
+  ['points',    i => fmt(npt[i])],
+  ['class',     i => M.classes[cls[i]]],
+  ['drivable',  i => trv[i] ? 'yes' : 'no'],
+  ['ground z',  i => (zg[i]*.001).toFixed(3) + ' m'],
+  ['surface z', i => (zmx[i]*.001).toFixed(3) + ' m'],
+  ['obstacle',  i => (obs[i]*.001).toFixed(3) + ' m'],
+  ['clearance', i => clr[i] >= 29000 ? 'none' : (clr[i]*.001).toFixed(3) + ' m'],
+  ['roughness', i => (rgh[i]*.001).toFixed(3) + ' m'],
+  ['step',      i => (stp[i]*.001).toFixed(3) + ' m'],
+  ['dip',       i => (dip[i]*.001).toFixed(3) + ' m']
+];
+function readout(i){
+  const dl = el('read'), hint = el('readhint');
+  if (i < 0){ dl.innerHTML = ''; hint.style.display = ''; return; }
+  hint.style.display = 'none';
+  dl.innerHTML = FIELDS.map(f => '<dt>'+f[0]+'</dt><dd>'+f[1](i)+'</dd>').join('');
+}
+
+/* ------------------------------------------------------ interaction */
+let drag = null;
+planC.addEventListener('pointerdown', e => {
+  drag = {px:e.clientX, py:e.clientY, x:view.x, y:view.y,
+          az:ob.az, el:ob.el, ox:ob.px0, oy:ob.py0};
+  planC.setPointerCapture(e.pointerId);
+});
+planC.addEventListener('pointerup', () => { drag = null; draw(); });
+planC.addEventListener('pointerleave', () => { drag = null; hover = -1; readout(-1); draw(); });
+planC.addEventListener('pointermove', e => {
+  const r = planC.getBoundingClientRect();
+  if (is3d()){
+    if (!drag){
+      if (mode === 'oblique'){
+        hover = obPick(e.clientX - r.left, e.clientY - r.top);
+        readout(hover); draw();
+      }
+      return;
+    }
+    const dx = e.clientX - drag.px, dy = e.clientY - drag.py;
+    if (e.shiftKey || e.buttons === 4){
+      ob.px0 = drag.ox + dx; ob.py0 = drag.oy + dy;
+    } else {
+      ob.az = drag.az - dx*.006;
+      ob.el = Math.max(.06, Math.min(1.45, drag.el + dy*.004));
+    }
+    draw(); return;
+  }
+  if (drag){
+    view.x = drag.x - (e.clientX - drag.px)/view.ppm;
+    view.y = drag.y + (e.clientY - drag.py)/view.ppm;
+  } else {
+    const X = wx(e.clientX - r.left), Y = wy(e.clientY - r.top);
+    rowY = Y; hover = pick(X, Y); readout(hover);
+  }
+  draw();
+});
+planC.addEventListener('wheel', e => {
+  e.preventDefault();
+  if (is3d()){
+    const r2 = planC.getBoundingClientRect(), mx = e.clientX-r2.left, my = e.clientY-r2.top;
+    const S2 = Math.min(900, Math.max(.4, ob.S * Math.pow(.999, e.deltaY)));
+    ob.px0 = mx - (mx - ob.px0)*(S2/ob.S);
+    ob.py0 = my - (my - ob.py0)*(S2/ob.S);
+    ob.S = S2; draw(); return;
+  }
+  const r = planC.getBoundingClientRect();
+  const mx = e.clientX - r.left, my = e.clientY - r.top;
+  const X = wx(mx), Y = wy(my);
+  view.ppm = Math.min(400, Math.max(.6, view.ppm * Math.pow(.999, e.deltaY)));
+  view.x = X - (mx - PW/2)/view.ppm;
+  view.y = Y + (my - PH/2)/view.ppm;
+  draw();
+}, {passive:false});
+
+new ResizeObserver(() => resize()).observe(planC.parentElement);
+new ResizeObserver(() => resize()).observe(sectC.parentElement);
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+  SP_SH = null; recolour(); draw(); });
+
+function fromHash(){
+  const h = new URLSearchParams(location.hash.slice(1));
+  const L = LAYERS.find(x => x.id === h.get('layer'));
+  if (L) layer = L;
+  [...el('layers').children].forEach(x =>
+    x.setAttribute('aria-pressed', x.dataset.id === layer.id));
+  if (h.has('x')){ view.x = +h.get('x'); view.y = +h.get('y' ) || 0; rowY = +h.get('y') || 0; }
+  if (h.has('mode')) mode = h.get('mode');
+  if (h.has('az')) ob.az = +h.get('az') * Math.PI/180;
+  if (h.has('el')) ob.el = +h.get('el') * Math.PI/180;
+  if (h.has('vex')) ob.vex = +h.get('vex');
+  for (const [q, f] of [['src','src'], ['paint','paint']])
+    if (h.has(q)) srf[f] = h.get(q);
+  if (h.has('mesh')) srf.mesh = h.get('mesh') === '1';
+  for (const [id, f] of [['srfsrc','src'], ['srfpaint','paint']])
+    [...el(id).children].forEach(x => x.setAttribute('aria-pressed', x.dataset.v === srf[f]));
+  for (const k of ['outline','points','rings']) if (h.has(k)) opt[k] = h.get(k) === '1';
+  if (h.has('w')){ view.ppm = PW / +h.get('w'); ob.S = PW / (+h.get('w')*2.2); }
+  if (h.has('x')) obAnchor(view.x, view.y, PW/2, PH*.62); else obfit();
+  buildLegend();
+  [...el('toggles').children].forEach(x => x.setAttribute('aria-pressed', opt[x.dataset.k]));
+  [...el('modes').children].forEach(x => x.setAttribute('aria-pressed', x.dataset.m === mode));
+  [...el('vex').children].forEach(x => x.setAttribute('aria-pressed', +x.dataset.v === ob.vex));
+  setMode();
+}
+requestAnimationFrame(() => { [PW,PH] = sizeCanvas(planC); [SW,SH] = sizeCanvas(sectC);
+  home(); fromHash(); recolour(); draw(); });
+})();
+</script>

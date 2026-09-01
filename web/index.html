@@ -1,0 +1,111 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Adaptive 2.5D Pipeline</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="/style.css">
+
+<div class="app">
+  <header>
+    <div>
+      <h1>Adaptive 2.5D Pipeline</h1>
+      <div class="sub">LiDAR frames &rarr; detector &rarr; variable-resolution elevation map, on demand</div>
+    </div>
+    <div class="pill"><span class="dot" id="dot"></span><span id="state">idle</span></div>
+  </header>
+
+  <div class="body">
+    <aside>
+      <section>
+        <h2>Run</h2>
+        <div class="grid2">
+          <div><label for="seq">sequence</label><select id="seq"></select></div>
+          <div><label for="source">labels</label>
+            <select id="source">
+              <option value="model">detector</option>
+              <option value="truth">ground truth</option>
+            </select></div>
+        </div>
+        <div style="margin-top:10px"><label>frame selection</label>
+          <div class="seg" id="mode">
+            <button data-v="sequential" aria-pressed="true">sequential</button>
+            <button data-v="random" aria-pressed="false">random</button>
+          </div>
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <div><label for="start">start frame</label><input id="start" type="number" value="0" min="0"></div>
+          <div><label for="count">how many</label><input id="count" type="number" value="8" min="1" max="60"></div>
+        </div>
+        <div class="grid2" style="margin-top:10px">
+          <div><label for="stride">stride</label><input id="stride" type="number" value="1" min="1"></div>
+          <div><label for="seed">random seed</label><input id="seed" type="number" value="0" min="0"></div>
+        </div>
+        <button class="run" id="go">Run pipeline</button>
+        <button class="ghost" id="stop" hidden>Cancel</button>
+        <p class="note" id="hint">Sequential frames are consecutive sweeps &mdash; real motion.
+          Nothing is precomputed: each frame is pulled from the remote archive,
+          labelled, converted and reduced when you ask for it.</p>
+        <div class="err" id="err"></div>
+      </section>
+
+      <section>
+        <h2>Frames</h2>
+        <div class="strip" id="strip"></div>
+        <p class="note" id="prog">no run yet</p>
+      </section>
+
+      <section>
+        <h2>This frame</h2>
+        <dl id="kv"><dt>&mdash;</dt><dd>&mdash;</dd></dl>
+      </section>
+
+      <section>
+        <h2>Legend</h2>
+        <div id="legend"></div>
+      </section>
+    </aside>
+
+    <div class="stage">
+      <canvas id="view"></canvas>
+      <div class="empty" id="empty">Choose a sequence and press <b>Run pipeline</b>.<br>
+        Frames appear here as they finish.</div>
+      <div class="tag" id="tagL" hidden></div>
+      <div class="tag b" id="tagB" hidden></div>
+
+      <div class="float opts">
+        <div><label>surface</label>
+          <div class="seg" id="src">
+            <button data-v="ztop" aria-pressed="true">top</button>
+            <button data-v="zgnd" aria-pressed="false">terrain</button>
+          </div></div>
+        <div><label>colour by</label>
+          <div class="seg" id="paint">
+            <button data-v="height" aria-pressed="true">height</button>
+            <button data-v="cls" aria-pressed="false">class</button>
+            <button data-v="trav" aria-pressed="false">drive</button>
+          </div></div>
+        <div><label>height scale</label>
+          <div class="seg" id="vex">
+            <button data-v="1" aria-pressed="false">1&times;</button>
+            <button data-v="2" aria-pressed="true">2&times;</button>
+            <button data-v="4" aria-pressed="false">4&times;</button>
+            <button data-v="8" aria-pressed="false">8&times;</button>
+          </div></div>
+        <div class="seg" id="toggles">
+          <button data-v="mesh" aria-pressed="true">mesh</button>
+          <button data-v="rings" aria-pressed="true">rings</button>
+        </div>
+      </div>
+
+      <div class="float transport" id="transport" hidden>
+        <button id="prev">&#9664;</button>
+        <button class="play" id="play">Play</button>
+        <button id="next">&#9654;</button>
+        <input type="range" id="scrub" min="0" max="0" value="0">
+        <span class="mono" id="fnum" style="font-size:11.5px;min-width:74px"></span>
+      </div>
+    </div>
+  </div>
+</div>
+<script src="/app.js"></script>
