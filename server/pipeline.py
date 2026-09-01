@@ -34,6 +34,8 @@ SURF_MULT = 4          # surface base 20/40/80/160 cm, keeps a frame ~400 KB
 # about 90 degrees wide, while the map is the full 360 -- so the photo shows
 # roughly the top-right quadrant of the map, not all of it.
 CAM = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_color.zip'
+CALIB = 'https://s3.eu-central-1.amazonaws.com/avg-kitti/data_odometry_calib.zip'
+_calib: dict[str, dict] = {}
 _model_lock = threading.Lock()
 _model = None
 # a pool rather than one shared handle: ZipFile is not thread safe, and
@@ -129,6 +131,36 @@ def cell_provenance(m, x, y, prov):
     return out
 
 
+def calib(seq: str):
+    """
+    where the camera points and how wide it sees, in the laser's own frame.
+
+    all four KITTI cameras are one forward-facing stereo rig -- they differ
+    only by a sideways offset of up to 54 cm -- so there is no rear or side
+    view to be had. this exists to draw the slice the photo DOES cover onto
+    the map, rather than describing it in a caption.
+    """
+    if seq in _calib:
+        return _calib[seq]
+    import zipfile, urllib.request
+    p = RAW / 'calib.zip'
+    if not p.exists() or not p.stat().st_size:
+        p.write_bytes(urllib.request.urlopen(CALIB, timeout=120).read())
+    with zipfile.ZipFile(p) as z:
+        txt = z.read(f'dataset/sequences/{seq}/calib.txt').decode()
+    v = {}
+    for line in txt.strip().splitlines():
+        k, rest = line.split(':', 1)
+        v[k.strip()] = np.array([float(x) for x in rest.split()])
+    fx = v['P2'].reshape(3, 4)[0, 0]
+    fov = float(2*np.degrees(np.arctan(1241/(2*fx))))
+    R = v['Tr'].reshape(3, 4)[:, :3]
+    fwd = R.T @ np.array([0.0, 0.0, 1.0])        # camera +z, in laser coords
+    yaw = float(np.degrees(np.arctan2(fwd[1], fwd[0])))
+    _calib[seq] = dict(fov=round(fov, 1), yaw=round(yaw, 1))
+    return _calib[seq]
+
+
 def image(seq: str, frame: str):
     """
     the camera frame that goes with this sweep, pulled the same way as the
@@ -142,6 +174,13 @@ def image(seq: str, frame: str):
         data = z.read(f'dataset/sequences/{seq}/image_2/{frame}.png')
     p.write_bytes(data)
     return p
+
+
+def _safe_calib(seq):
+    try:
+        return calib(seq)
+    except Exception:
+        return None
 
 
 def prefetch_image(seq: str, frame: str):
@@ -227,6 +266,7 @@ def build(seq: str, frame: str, source: str = 'model'):
         ms=dict(fetch=round(t_fetch*1000), label=round(t_label*1000),
                 grid=round(t_grid*1000), surface=round(t_surf*1000)),
         fetched=fetched, cached=False,
+        cam=_safe_calib(seq),
     )
     key.write_text(json.dumps(out, separators=(',', ':')))
     return out

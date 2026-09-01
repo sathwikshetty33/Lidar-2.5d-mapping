@@ -120,6 +120,32 @@ function draw(){
     ctx.setLineDash([]);
   }
 
+  /* the wedge the camera actually sees. the photo is 23% of the map, and
+     saying so in a caption is weaker than drawing the edge of it. */
+  if (S.camera && d && d.cam){
+    const R = 45, y0 = (d.cam.yaw - d.cam.fov/2)*Math.PI/180,
+                  y1 = (d.cam.yaw + d.cam.fov/2)*Math.PI/180;
+    const at = a => { const X=R*Math.cos(a), Y=R*Math.sin(a);
+                      return [X*ux+Y*uy+X0, X*vx+Y*vy+Y0]; };
+    ctx.strokeStyle = css('--mark'); ctx.lineWidth = 1.2;
+    ctx.globalAlpha = .55; ctx.setLineDash([6,4]);
+    ctx.beginPath();
+    for (const a of [y0, y1]){ const p = at(a); ctx.moveTo(X0,Y0); ctx.lineTo(p[0],p[1]); }
+    ctx.stroke();
+    ctx.beginPath();
+    for (let i=0;i<=32;i++){ const p = at(y0+(y1-y0)*i/32);
+      i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]); }
+    ctx.stroke();
+    ctx.setLineDash([]);
+    const mid = at((y0+y1)/2);
+    ctx.fillStyle = css('--mark');
+    ctx.font = '10px "IBM Plex Mono", monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`camera ${d.cam.fov.toFixed(0)}\u00b0`, mid[0], mid[1] - 6);
+    ctx.textAlign = 'start';
+    ctx.globalAlpha = 1;
+  }
+
   /* one stride shared by every tier so the 2:1 ratio between them survives */
   const budget = (S.drag||S.playing) ? 16000 : 40000;
   const base = T[0].res;
