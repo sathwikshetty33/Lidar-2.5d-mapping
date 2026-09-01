@@ -336,13 +336,38 @@ $('play').onclick = () => {
 $('prev').onclick = () => { S.playing=false; $('play').textContent='Play'; show(S.cur-1); };
 $('next').onclick = () => { S.playing=false; $('play').textContent='Play'; show(S.cur+1); };
 $('scrub').oninput = e => { S.playing=false; $('play').textContent='Play'; show(+e.target.value); };
+function pan(dx, dy){
+  const step = 0.12 * Math.min(W, H);
+  S.ob.px0 -= dx*step; S.ob.py0 -= dy*step;
+  S.touched = true; redraw();
+}
+function zoom(dir, ax, ay){
+  const f = dir > 0 ? 1.25 : 1/1.25;
+  const s2 = Math.min(900, Math.max(.4, S.ob.S*f));
+  const mx = ax ?? W/2, my = ay ?? H/2;
+  S.ob.px0 = mx - (mx - S.ob.px0)*(s2/S.ob.S);
+  S.ob.py0 = my - (my - S.ob.py0)*(s2/S.ob.S);
+  S.ob.S = s2; S.touched = true; redraw();
+}
+$('nav').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  if (b.dataset.zoom) return zoom(+b.dataset.zoom);
+  const [dx, dy] = b.dataset.pan.split(',').map(Number);
+  if (!dx && !dy){ fit(); redraw(); } else pan(dx, dy);
+});
 $('fitbtn').onclick = () => { fit(); redraw(); };
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'SELECT') return;
   if (e.key === 'f' || e.key === 'F'){ fit(); redraw(); }
   else if (e.key === ' '){ e.preventDefault(); $('play').click(); }
-  else if (e.key === 'ArrowLeft') $('prev').click();
-  else if (e.key === 'ArrowRight') $('next').click();
+  else if (e.key === 'ArrowLeft'){ e.preventDefault(); pan(-1, 0); }
+  else if (e.key === 'ArrowRight'){ e.preventDefault(); pan(1, 0); }
+  else if (e.key === 'ArrowUp'){ e.preventDefault(); pan(0, -1); }
+  else if (e.key === 'ArrowDown'){ e.preventDefault(); pan(0, 1); }
+  else if (e.key === '+' || e.key === '=') zoom(1);
+  else if (e.key === '-' || e.key === '_') zoom(-1);
+  else if (e.key === ',') $('prev').click();
+  else if (e.key === '.') $('next').click();
 });
 
 /* ----------------------------------------------------------- view options */
@@ -423,15 +448,18 @@ function overlay(){
 }
 
 /* -------------------------------------------------------------- camera */
+cv.addEventListener('contextmenu', e => e.preventDefault());   // right-drag pans
 cv.addEventListener('pointerdown', e => {
-  S.drag = {x:e.clientX, y:e.clientY, az:S.ob.az, el:S.ob.el, ox:S.ob.px0, oy:S.ob.py0};
-  cv.setPointerCapture(e.pointerId); cv.style.cursor='grabbing';
+  S.drag = {x:e.clientX, y:e.clientY, az:S.ob.az, el:S.ob.el,
+            ox:S.ob.px0, oy:S.ob.py0, pan:(e.button === 2 || e.button === 1 || e.shiftKey)};
+  cv.setPointerCapture(e.pointerId);
+  cv.style.cursor = S.drag.pan ? 'move' : 'grabbing';
 });
 cv.addEventListener('pointerup', ()=>{ S.drag=null; cv.style.cursor='grab'; redraw(); });
 cv.addEventListener('pointermove', e => {
   if (!S.drag) return;
   const dx=e.clientX-S.drag.x, dy=e.clientY-S.drag.y;
-  if (e.shiftKey){ S.ob.px0=S.drag.ox+dx; S.ob.py0=S.drag.oy+dy; }
+  if (S.drag.pan || e.shiftKey){ S.ob.px0=S.drag.ox+dx; S.ob.py0=S.drag.oy+dy; }
   else { S.ob.az=S.drag.az-dx*.006;
          S.ob.el=Math.max(.06, Math.min(1.45, S.drag.el+dy*.004)); }
   S.touched = true;
@@ -445,6 +473,8 @@ cv.addEventListener('wheel', e => {
   S.ob.py0 = my-(my-S.ob.py0)*(s2/S.ob.S);
   S.ob.S = s2; S.touched = true; redraw();
 }, {passive:false});
+/* the transport hint has to say what the keys now do */
+$('fnum').title = 'frame  ( , and . step )';
 function resize(){
   const r = cv.parentElement.getBoundingClientRect();
   dpr = Math.min(2, devicePixelRatio||1);

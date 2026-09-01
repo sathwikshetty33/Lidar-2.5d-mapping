@@ -122,3 +122,23 @@ canvas#view{position:absolute;inset:0;width:100%;height:100%;cursor:grab}
   border:1px solid var(--line);border-radius:var(--r);font-size:11.5px;color:var(--ink2)}
 .fitbtn:hover{border-color:var(--mark);color:var(--mark)}
 .fitbtn:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+
+/* pan + zoom pad, for people who do not know the drag modifiers */
+.nav{right:14px;bottom:16px;padding:9px 10px;display:flex;flex-direction:column;
+  gap:7px;align-items:center;width:150px}
+.nav .pad{display:grid;grid-template-columns:repeat(3,26px);
+  grid-template-rows:repeat(3,26px);gap:2px;
+  grid-template-areas:". u ." "l m r" ". d ."}
+.nav .pad button:nth-child(1){grid-area:u} .nav .pad button:nth-child(2){grid-area:l}
+.nav .pad button:nth-child(3){grid-area:m} .nav .pad button:nth-child(4){grid-area:r}
+.nav .pad button:nth-child(5){grid-area:d}
+.nav button{all:unset;cursor:pointer;display:grid;place-items:center;
+  border:1px solid var(--line);border-radius:var(--r);font-size:11px;color:var(--ink2)}
+.nav button:hover{border-color:var(--mark);color:var(--mark);background:var(--bg)}
+.nav button:active{background:var(--mark);color:var(--markw);border-color:var(--mark)}
+.nav button:focus-visible{outline:2px solid var(--mark);outline-offset:1px}
+.nav .pad button.mid{font-size:13px}
+.nav .zoom{display:grid;grid-template-columns:36px 36px;gap:4px}
+.nav .zoom button{height:26px;font-size:15px;font-weight:600}
+.hint2{margin:2px 0 0;font-size:9.5px;line-height:1.5;color:var(--ink3);text-align:center}
+@media (max-width:900px){.nav{display:none}}

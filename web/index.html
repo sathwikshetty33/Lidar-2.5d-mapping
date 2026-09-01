@@ -114,6 +114,22 @@
           Fit whole map</button>
       </div>
 
+      <div class="float nav" id="nav">
+        <div class="pad">
+          <button data-pan="0,-1"  title="pan up (arrow up)">&#9650;</button>
+          <button data-pan="-1,0"  title="pan left (arrow left)">&#9664;</button>
+          <button data-pan="0,0"   title="fit whole map (f)" class="mid">&#9678;</button>
+          <button data-pan="1,0"   title="pan right (arrow right)">&#9654;</button>
+          <button data-pan="0,1"   title="pan down (arrow down)">&#9660;</button>
+        </div>
+        <div class="zoom">
+          <button data-zoom="1"  title="zoom in (+)">&#43;</button>
+          <button data-zoom="-1" title="zoom out (&minus;)">&minus;</button>
+        </div>
+        <p class="hint2">drag to orbit &middot; right&#8209;drag or shift&#8209;drag to pan
+          &middot; wheel or &#43;/&minus; to zoom &middot; arrows to pan</p>
+      </div>
+
       <figure class="float cam" id="cam" hidden>
         <div class="camwrap">
           <img id="camimg" alt="the scene this sweep was taken in">
