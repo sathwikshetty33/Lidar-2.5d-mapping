@@ -52,7 +52,7 @@ const pal = () => { if (!SP){ SP = shades(SPECTRAL); CL = shades(CLASSC);
 /* ------------------------------------------------------------------ state */
 const S = {
   job:null, frames:[], data:new Map(), cur:-1, playing:false, spf:600, last:0,
-  src:'ztop', paint:'height', mesh:true, rings:true, camera:true,
+  src:'ztop', paint:'height', mesh:true, rings:true, camera:true, proj:true,
   ob:{az:3.90, el:.40, S:14, px0:0, py0:0, vex:2}, drag:null, es:null,
 };
 const cv = $('view'), ctx = cv.getContext('2d');
@@ -334,6 +334,15 @@ function seg(id, get, set){
 seg('src', ()=>S.src, v => { S.src=v; setVex(v==='ztop'?2:8); fit(); });
 seg('paint', ()=>S.paint, v => S.paint=v);
 seg('vex', ()=>String(S.ob.vex), v => setVex(+v));
+/* straight down, so all four quadrants of the map are visible at once --
+   the photo only ever covers one of them */
+let angle = 'tilt';
+seg('angle', ()=>angle, v => {
+  angle = v;
+  S.ob.el = v === 'top' ? 1.48 : 0.40;
+  S.ob.az = v === 'top' ? Math.PI : 3.90;
+  fit();
+});
 function setVex(v){
   const f = v/S.ob.vex; S.ob.vex = v;
   S.ob.py0 = H*.5 - (H*.5-S.ob.py0)*f;
@@ -343,7 +352,9 @@ $('toggles').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
   S[b.dataset.v] = !S[b.dataset.v];
   b.setAttribute('aria-pressed', String(S[b.dataset.v]));
-  if (b.dataset.v === 'camera') photo(); else redraw();
+  if (b.dataset.v === 'camera') photo();
+  else if (b.dataset.v === 'proj') overlay();
+  else redraw();
 });
 
 /* the camera frame for whatever is on screen. it arrives on its own schedule
@@ -352,13 +363,40 @@ function photo(){
   const box = $('cam'), img = $('camimg');
   if (!S.camera || !S.job || S.cur < 0){ box.hidden = true; return; }
   const f = S.frames[S.cur];
-  const url = `/api/jobs/${S.job}/image/${f}`;
-  if (img.dataset.f === f){ box.hidden = false; return; }
-  img.dataset.f = f;
-  box.hidden = false; box.classList.add('pending');
-  img.onload = () => { if (img.dataset.f === f) box.classList.remove('pending'); };
-  img.onerror = () => { if (img.dataset.f === f) box.hidden = true; };
-  img.src = url;
+  if (img.dataset.f !== f){
+    img.dataset.f = f;
+    box.classList.add('pending');
+    img.onload = () => { if (img.dataset.f === f){ box.classList.remove('pending'); overlay(); } };
+    img.onerror = () => { if (img.dataset.f === f) box.hidden = true; };
+    img.src = `/api/jobs/${S.job}/image/${f}`;
+  }
+  box.hidden = false;
+  overlay();
+}
+
+/* the same laser points, put back through the camera. this is the picture
+   that shows the two really are the same scene -- and it only covers the
+   82 degrees the lens sees, which is the point being made. */
+function overlay(){
+  const c = $('camov'), d = frameOf(S.frames[S.cur]);
+  const p = d && d.proj;
+  const box = $('cam');
+  $('projn').textContent = p && S.proj
+    ? ` ${fmt(p.n)} of the sweep's points fall inside it.` : '';
+  if (!p || !S.proj){ if (c.width) c.getContext('2d').clearRect(0,0,c.width,c.height); return; }
+  const r = Math.min(2, devicePixelRatio||1);
+  const w = c.clientWidth || 1, h = c.clientHeight || Math.round(w*p.h/p.w);
+  c.width = Math.round(w*r); c.height = Math.round(h*r);
+  const g = c.getContext('2d');
+  g.setTransform(r,0,0,r,0,0); g.clearRect(0,0,w,h);
+  if (!d._proj) d._proj = {u:dec(p.u,Uint16Array), v:dec(p.v,Uint16Array), cls:dec(p.cls,Uint8Array)};
+  const {u,v,cls} = d._proj, sx = w/p.w, sy = h/p.h;
+  const dot = w > 380 ? 1.6 : 1.1;
+  let cur = -1;
+  for (let i = 0; i < u.length; i++){
+    if (cls[i] !== cur){ cur = cls[i]; g.fillStyle = CLASSC[cur]; }
+    g.fillRect(u[i]*sx, v[i]*sy, dot, dot);
+  }
 }
 
 /* -------------------------------------------------------------- camera */

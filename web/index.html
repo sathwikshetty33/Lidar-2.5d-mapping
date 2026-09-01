@@ -97,14 +97,23 @@
           <button data-v="mesh" aria-pressed="true">mesh</button>
           <button data-v="rings" aria-pressed="true">rings</button>
           <button data-v="camera" aria-pressed="true">photo</button>
+          <button data-v="proj" aria-pressed="true">points</button>
+        </div>
+        <div class="seg" id="angle">
+          <button data-v="tilt" aria-pressed="true">3D</button>
+          <button data-v="top" aria-pressed="false">top&#8209;down</button>
         </div>
       </div>
 
       <figure class="float cam" id="cam" hidden>
-        <img id="camimg" alt="the scene this sweep was taken in">
+        <div class="camwrap">
+          <img id="camimg" alt="the scene this sweep was taken in">
+          <canvas id="camov"></canvas>
+        </div>
         <figcaption>left colour camera. KITTI has no rear or side camera &mdash; all
           four of its images are one forward stereo rig &mdash; so this covers the
-          dashed wedge on the map and nothing else.</figcaption>
+          dashed wedge on the map and nothing else.
+          <span id="projn"></span></figcaption>
       </figure>
 
       <div class="float transport" id="transport" hidden>

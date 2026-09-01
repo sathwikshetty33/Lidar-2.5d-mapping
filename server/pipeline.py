@@ -29,6 +29,8 @@ RAW.mkdir(parents=True, exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=True)
 
 SURF_MULT = 4          # surface base 20/40/80/160 cm, keeps a frame ~400 KB
+CACHE_V = 3            # bump when the frame payload changes shape, so stale
+                       # cache entries are rebuilt instead of silently served
 
 # the left colour camera that rode along with the laser. it is FORWARD ONLY,
 # about 90 degrees wide, while the map is the full 360 -- so the photo shows
@@ -176,6 +178,43 @@ def image(seq: str, frame: str):
     return p
 
 
+def project(seq, xyz, lab, w=1241, h=376):
+    """
+    put the laser points onto the camera image.
+
+    velodyne -> rectified camera (Tr) -> pixels (P2), then keep only what is
+    in front of the lens and inside the frame. that is about 15% of a sweep:
+    the camera sees 82 degrees of the laser's 360.
+    """
+    import zipfile
+    with zipfile.ZipFile(RAW / 'calib.zip') as z:
+        txt = z.read(f'dataset/sequences/{seq}/calib.txt').decode()
+    V = {}
+    for line in txt.strip().splitlines():
+        k, r = line.split(':', 1)
+        V[k.strip()] = np.array([float(x) for x in r.split()])
+    P2, Tr = V['P2'].reshape(3, 4), V['Tr'].reshape(3, 4)
+    cam = (Tr @ np.c_[xyz, np.ones(len(xyz))].T).T
+    hom = (P2 @ np.c_[cam, np.ones(len(cam))].T).T
+    d = hom[:, 2]
+    ok = d > 0.1
+    u = np.where(ok, hom[:, 0] / np.where(ok, d, 1), -1)
+    v = np.where(ok, hom[:, 1] / np.where(ok, d, 1), -1)
+    m = ok & (u >= 0) & (u < w) & (v >= 0) & (v < h)
+    return dict(w=w, h=h, n=int(m.sum()),
+                u=base64.b64encode(u[m].astype(np.uint16).tobytes()).decode(),
+                v=base64.b64encode(v[m].astype(np.uint16).tobytes()).decode(),
+                cls=base64.b64encode(lab[m].astype(np.uint8).tobytes()).decode())
+
+
+def _safe_project(seq, xyz, lab):
+    try:
+        calib(seq)                      # makes sure calib.zip is on disk
+        return project(seq, xyz, lab)
+    except Exception:
+        return None
+
+
 def _safe_calib(seq):
     try:
         return calib(seq)
@@ -207,8 +246,9 @@ def build(seq: str, frame: str, source: str = 'model'):
     key = OUT / f'{seq}_{frame}_{source}.json'
     if key.exists():
         d = json.loads(key.read_text())
-        d['cached'] = True
-        return d
+        if d.get('v') == CACHE_V:
+            d['cached'] = True
+            return d
 
     t0 = time.perf_counter()
     binp, labp, fetched = fetch(seq, frame, want_truth=(source == 'truth'))
@@ -266,7 +306,9 @@ def build(seq: str, frame: str, source: str = 'model'):
         ms=dict(fetch=round(t_fetch*1000), label=round(t_label*1000),
                 grid=round(t_grid*1000), surface=round(t_surf*1000)),
         fetched=fetched, cached=False,
+        v=CACHE_V,
         cam=_safe_calib(seq),
+        proj=_safe_project(seq, np.stack([x, y, z], 1), lab),
     )
     key.write_text(json.dumps(out, separators=(',', ':')))
     return out
