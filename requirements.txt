@@ -1,0 +1,30 @@
+# ---------------------------------------------------------------------------
+# SIH 2026 / PS 26053 -- adaptive variable-resolution 2.5D LiDAR mapping
+#
+#   python3 -m venv .venv
+#   .venv/bin/pip install -r requirements.txt
+#
+# IMPORTANT, torch: the line below pulls the CPU-only build (~200 MB) from
+# PyTorch's own index. Without --extra-index-url pip takes torch from PyPI,
+# which is the CUDA build and drags in ~2.5 GB of nvidia-* wheels this project
+# never uses. On the GPU box, drop the two --index-url lines and let pip take
+# the default CUDA build instead.
+# ---------------------------------------------------------------------------
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# --- the grid engine.  grid25.py / scene.py / check.py need only these two ---
+numpy>=2.0
+scipy>=1.11                 # ndimage: distance transform, median/min/uniform filters
+
+# --- the detector (predict.py + trail/) ------------------------------------
+torch>=2.2                  # runs MadhankumarAI/trail's best.pt on CPU
+numba>=0.59                 # its ground remover is jitted; without this it will not import
+pyyaml>=6.0                 # its config loader
+tqdm>=4.66                  # its progress bars
+
+# --- the pipeline service (server/ + web/) ---------------------------------
+fastapi>=0.110
+uvicorn[standard]>=0.27
+
+# fetch_kitti.py uses only the standard library (urllib + zipfile), so pulling
+# frames out of the remote SemanticKITTI archives needs nothing extra.
