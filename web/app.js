@@ -209,7 +209,17 @@ function draw(){
     const dd=kk*Tt.res, X=Tt.x0+i*Tt.res, Y=Tt.y0+j*Tt.res;
     const ax=X*ux+Y*uy+X0, ay=X*vx+Y*vy+Y0;
     const dux=dd*ux,duy=dd*uy,dvx=dd*vx,dvy=dd*vy;
-    const gx=((h1+h2)-(h0+h3))*.5/dd*S.ob.vex, gy=((h3+h2)-(h0+h1))*.5/dd*S.ob.vex;
+    /* Normal from a NEIGHBOURHOOD, not from this quad's own four corners.
+       grid_map does the same thing in its NormalVectorsFilter: fit over a
+       radius rather than the immediate cell, so the shading varies smoothly
+       instead of showing every facet. The heights are untouched -- this only
+       changes how the surface is lit. */
+    const wi0 = i>=kk ? p0-kk : p0, wi1 = (i+2*kk<nx) ? p1+kk : p1;
+    const wj0 = j>=kk ? p0-kk*nx : p0, wj1 = (j+2*kk<Tt.ny) ? p3+kk*nx : p3;
+    const spanx = ((i+2*kk<nx)?1:0) + ((i>=kk)?1:0) + 1;
+    const spany = ((j+2*kk<Tt.ny)?1:0) + ((j>=kk)?1:0) + 1;
+    const gx=(A[wi1]-A[wi0])*.001/(spanx*dd)*S.ob.vex;
+    const gy=(A[wj1]-A[wj0])*.001/(spany*dd)*S.ob.vex;
     const inv=1/Math.sqrt(gx*gx+gy*gy+1);
     let nl=(-gx*LX-gy*LY+LZ)*inv; if(nl<0)nl=0;
     const sh=(.12+.88*nl)*(NSH-1)|0;
@@ -468,7 +478,7 @@ async function run(){
     mode: document.querySelector('#mode [aria-pressed=true]').dataset.v,
     start: +$('start').value, count: +$('count').value,
     stride: +$('stride').value, source: $('source').value, seed: +$('seed').value,
-    camera: S.camera,
+    camera: S.camera, detail: +$('detail').value,
   };
   $('go').disabled = true; $('stop').hidden = false;
   setState('starting', 'run');
@@ -538,7 +548,7 @@ $('stop').onclick = async () => { if (S.job) await fetch(`/api/jobs/${S.job}/can
 
   /* the whole run is addressable: ?seq=00&mode=sequential&count=8&auto=1 */
   const q = new URLSearchParams(location.search);
-  for (const k of ['seq','source','start','count','stride','seed'])
+  for (const k of ['seq','source','start','count','stride','seed','detail'])
     if (q.has(k)) $(k).value = q.get(k);
   if (q.has('mode')){
     [...$('mode').children].forEach(b =>

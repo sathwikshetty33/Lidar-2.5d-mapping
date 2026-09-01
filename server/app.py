@@ -36,6 +36,7 @@ class JobSpec(BaseModel):
     source: str = 'model'         # model | truth
     seed: int = 0
     camera: bool = True           # also pull the matching camera frame
+    detail: int = 4               # surface base = 5 cm x this (4=20cm, 2=10cm, 1=5cm)
 
 
 def _run(job_id: str):
@@ -57,7 +58,7 @@ def _run(job_id: str):
             break
         try:
             futs[fid].result()                 # its download is done (or failed)
-            out = P.build(job['seq'], fid, job['source'])
+            out = P.build(job['seq'], fid, job['source'], job['detail'])
             with _lock:
                 job['done'][fid] = out
                 job['order'].append(fid)
@@ -96,7 +97,8 @@ def create(spec: JobSpec):
         raise HTTPException(400, 'that range contains no frames')
     jid = uuid.uuid4().hex[:12]
     JOBS[jid] = dict(id=jid, seq=spec.seq, source=spec.source, frames=frames,
-                     camera=spec.camera, done={}, order=[], errors=[],
+                     camera=spec.camera, detail=max(1, min(4, spec.detail)),
+                     done={}, order=[], errors=[],
                      events=queue.Queue(), state='running', cancel=False,
                      cam_pool=ThreadPoolExecutor(max_workers=2, thread_name_prefix='cam'),
                      spec=spec.model_dump())

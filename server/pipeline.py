@@ -28,7 +28,10 @@ OUT = ROOT / 'cache' / 'frames'
 RAW.mkdir(parents=True, exist_ok=True)
 OUT.mkdir(parents=True, exist_ok=True)
 
-SURF_MULT = 4          # surface base 20/40/80/160 cm, keeps a frame ~400 KB
+SURF_MULT = 4          # surface base = 5 cm x this. 4 -> 20/40/80/160 cm.
+                       # a car is 0.7 m wide, so at 20 cm it spans 3 nodes and
+                       # renders as a flat slab. 10 cm gives 7 and it starts to
+                       # look like a car, for 4x the payload.
 CACHE_V = 4            # bump when the frame payload changes shape, so stale
                        # cache entries are rebuilt instead of silently served
 
@@ -237,13 +240,13 @@ def prefetch(seq: str, frame: str, want_truth: bool):
         pass          # the worker will retry and report properly
 
 
-def build(seq: str, frame: str, source: str = 'model'):
+def build(seq: str, frame: str, source: str = 'model', mult: int = SURF_MULT):
     """
     source 'model'  -> labels from the PointNet detector
            'truth'  -> SemanticKITTI ground truth
     returns the dict the browser draws.
     """
-    key = OUT / f'{seq}_{frame}_{source}.json'
+    key = OUT / f'{seq}_{frame}_{source}_m{mult}.json'
     if key.exists():
         d = json.loads(key.read_text())
         if d.get('v') == CACHE_V:
@@ -282,7 +285,7 @@ def build(seq: str, frame: str, source: str = 'model'):
         extra['det'] = cell_provenance(m, x, y, prov[k])
 
     t0 = time.perf_counter()
-    srf = surface_json(m, x, y, z, lab, mult=SURF_MULT, quiet=True, extra=extra)
+    srf = surface_json(m, x, y, z, lab, mult=mult, quiet=True, extra=extra)
     t_surf = time.perf_counter() - t0
 
     s = g.memstats(m)
@@ -307,6 +310,7 @@ def build(seq: str, frame: str, source: str = 'model'):
                 grid=round(t_grid*1000), surface=round(t_surf*1000)),
         fetched=fetched, cached=False,
         v=CACHE_V,
+        mult=mult,
         cam=_safe_calib(seq),
         proj=_safe_project(seq, np.stack([x, y, z], 1), lab),
     )
