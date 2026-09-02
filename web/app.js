@@ -223,11 +223,21 @@ function draw(){
     const inv=1/Math.sqrt(gx*gx+gy*gy+1);
     let nl=(-gx*LX-gy*LY+LZ)*inv; if(nl<0)nl=0;
     const sh=(.12+.88*nl)*(NSH-1)|0;
+    /* Which corner speaks for the quad.
+       Height blends all four, but a CLASS cannot be averaged. Taking the
+       origin corner meant a vertical face spanning ground -> car roof was
+       coloured by the ground it stands on, so a car came out with a purple
+       top and grey sides. A face that spans a step belongs to the taller
+       thing standing there, so the tallest corner wins. */
+    let pc = p0, hm = h0;
+    if (h1 > hm){ pc = p1; hm = h1; }
+    if (h2 > hm){ pc = p2; hm = h2; }
+    if (h3 > hm){ pc = p3; }
     let ci;
     if (S.paint==='height'){ let u=((h0+h1+h2+h3)*.25-zlo)/zsp; ci=u<=0?0:u>=1?255:(u*255)|0; }
-    else if (S.paint==='cls') ci=Tt.cls[p0];
-    else if (S.paint==='det'){ const v = Tt.det ? Tt.det[p0] : 255; ci = v===255 ? 6 : v; }
-    else { const fl=Tt.flag[p0]; ci=(fl&1)?((fl>>1)&1)+1:0; }
+    else if (S.paint==='cls') ci=Tt.cls[pc];
+    else if (S.paint==='det'){ const v = Tt.det ? Tt.det[pc] : 255; ci = v===255 ? 6 : v; }
+    else { const fl=Tt.flag[pc]; ci=(fl&1)?((fl>>1)&1)+1:0; }
     const idx=ci*NSH+sh;
     if (idx!==cur){ cur=idx; ctx.fillStyle=P[idx]; }
     ctx.beginPath();
