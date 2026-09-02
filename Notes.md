@@ -392,7 +392,7 @@ A worked example from a real cell 7.38 m away:
         8.63     -1.954   -0.2264            -1.669 m
 
     lowest beam  -1.814 m      ground here  -1.947 m
-    so a beam cleared the ground by 0.21 m -- under the 2.2 m vehicle roof
+    so a beam cleared the ground by 0.21 m — under the 2.2 m vehicle roof
     the low space really was swept
 
 No beam was walked. It is a running minimum over a precomputed table, about
@@ -658,7 +658,77 @@ an imaginary dense 3D cube grid would be a rigged denominator.
 
 ---
 
-## 14. Running it as a workflow
+## 14. What the problem statement means by "no data loss"
+
+The brief says the data structure must "handle variable resolution without
+causing alignment errors or data loss during the projection from 3D to 2.5D".
+Taken literally that is self-contradictory: the same paragraph tells you to
+make cells bigger with distance, and bigger cells are lower resolution.
+
+So "data loss" cannot mean "loss of resolution". Read it with the clause it is
+attached to — *during the projection* — and it means three specific failures,
+all of them properties of the binning step:
+
+1. **Points vanish.** A point falls between cells of two different sizes and is
+   counted in neither.
+2. **Points are counted twice.** A point lands in a small cell and also in a big
+   cell that overlaps it.
+3. **A cell does not own its own patch of ground.** The cell covering a patch
+   holds only some of the points standing on it, so its height, its class tally
+   and its roughness are all computed from a partial sample.
+
+And "alignment errors" is the fourth: two cells claiming the same ground, so
+asking "what is at this spot?" returns two different answers.
+
+None of these are hypothetical. The naive version in section 5 produced 358
+points in the wrong cell and 80 cells short of their own contents, the worst
+seeing 11% of them; the version in section 6 left 82 patches of ground claimed
+twice. Whoever wrote that sentence had seen this happen.
+
+### What we can claim, and prove
+
+- **No point lost or duplicated.** The total of all cell counts equals the
+  number of points that went in, exactly: 124,668 in, 124,668 accounted for
+  across 48,909 cells on frame 0. One line to check, and it holds on every
+  frame.
+- **Every cell owns its patch.** Guaranteed by construction, not by testing:
+  points are binned before distance is consulted, and the size is constant
+  across a block, so a split cell cannot be expressed. 0 overlaps on 7 frames.
+- **Merging is exact, not approximate.** Because every stored number combines
+  with +, min or max, a 40 cm cell holds precisely the summary you would get by
+  binning the raw points at 40 cm in the first place. Checked on frame 0:
+  merging the 5 cm cells up three levels gives the same 9,027 cells as binning
+  directly at 40 cm, and every stored number is **bit-for-bit identical** --
+  counts, heights, extremes, sums, and all eight class tallies. The single
+  exception is the sum of squares, which differs in the 16th significant figure
+  (5.6e-16 relative) because the additions happen in a different order. Heights
+  themselves never drift at all, because min and max are extremes, not averages.
+
+### What we do lose, honestly
+
+**Where inside a cell each point was.** A real 40 cm cell from frame 0, 62 m
+out, knows "17 points, heights -1.44 to +2.32 m, all unclassified" but not
+whereabouts in those 40 cm each one landed. That is worth putting next to the
+sensor's own sampling: this laser's beams are 0.4 degrees apart vertically, so at
+62 m consecutive beams land about 43 cm apart, and adjacent shots in a sweep
+about 18 cm apart. The cell is the size of the gap between measurements. We are
+declining to store precision the sensor never had out there, not discarding
+detail it did.
+
+**Anything stacked above the lowest obstacle**, which has nothing to do with
+variable resolution — it is what 2.5D means. A square keeps the terrain, the
+bottom of the lowest thing above it and the top of the tallest, so a square
+holding a car bonnet at 1 m and a canopy at 4 m says "something from 1 to 4" and
+the clear air between them is not expressible. Measured on frame 0: 32% of
+squares hold something above the ground, and of all squares, 8.6% have more than
+half a metre of vertical extent squeezed into those two numbers and 0.75% more
+than two metres. Those are the squares where the summary could be hiding a gap.
+This is true of *any* 2.5D map, uniform or foveated. The brief asked for 2.5D,
+so it is accepted by construction — but say it before someone else does.
+
+---
+
+## 15. Running it as a workflow
 
 Rather than keeping files on disk and rebuilding by hand, the whole thing runs
 as a service. `./run_server.sh`, then open http://127.0.0.1:8011.
@@ -701,11 +771,16 @@ photo is about 850 KB against 2 MB for a scan, so it is quicker.
 The picture appears beside the map, for the frame you are looking at. Two things
 to be clear about:
 
-- **The camera looks forward only, roughly 90 degrees wide. The map is the full
-  360.** So the photo shows about one quadrant of what the map covers, not all
-  of it. The caption on the panel says so.
-- The camera and the laser sit in different places on the roof, so the two do
-  not line up pixel for pixel. It is context, not an overlay.
+- **The camera looks forward only, 82 degrees wide. The map is the full 360.**
+  So the photo shows about one quadrant of what the map covers, not all of it,
+  and there is no 360 photo to be had — KITTI simply did not record one. The
+  caption on the panel says so.
+- **The laser points can be drawn on top of the photo** (the `points` toggle).
+  This is a real projection, not an approximation: KITTI ships the transform
+  from the laser to the camera and the camera's own projection matrix, and the
+  points go through both, keeping only what is in front of the lens and inside
+  the frame — about 15% of a sweep. Coloured by class, it is the quickest way
+  to see whether a lump in the map is really the car you can see in the picture.
 
 It is fetched on a **separate, slower lane** from the scans, so a slow photo
 never holds up the map it belongs to. If a picture fails to arrive the map is
@@ -719,9 +794,141 @@ Worth looking at frame 0 of sequence 00 with the picture on: there is a
 motorcyclist in the middle of the road. That is the 88 "moving" points the
 ground truth marks, and the ones the detector misses entirely.
 
+### How fine the drawn surface is
+
+The stored map and the drawn surface are two different things. The map is the
+sparse set of cells that actually hold points — that is what you would keep or
+transmit. The surface is the dense field those cells describe: a node wherever a
+cell of that tier *could* sit, whether or not anything was seen there. Never
+quote the surface node count as the map size.
+
+The surface therefore has a size of its own, and it is a choice. `surface
+detail` on the control panel picks the base cell of the drawn mesh; the four
+tiers scale from it, and it is always an exact coarsening of the same grid,
+never a different grid:
+
+    coarse    20 / 40 / 80 / 160 cm      48k nodes    0.39 MB per frame
+    medium    10 / 20 / 40 /  80 cm     190k nodes    1.52 MB per frame
+    fine       5 / 10 / 20 /  40 cm     756k nodes    6.05 MB per frame
+
+(measured on sequence 00 frame 0; the stored map itself is 48,909 cells either
+way)
+
+Coarse was the original default because it fits a dozen frames on one page. It
+is also why a car looked like a slab: a car is about 1.8 m across, which at
+20 cm is nine nodes and at the 40 cm tier just three — not enough to have a
+roof, a windscreen and a bonnet. At medium it looks like a car. The cost is
+memory in the browser and time on the wire, nothing else; the map underneath is
+identical in all three.
+
+### Why the shading looks smooth without the heights being smoothed
+
+Shading needs a surface direction at each node. Taking it from the node and its
+immediate neighbours makes every cell a flat facet, and with foveated cells of
+four different sizes the facets are four different sizes too, so the picture
+breaks into visible tiles.
+
+The fix is the one ANYbotics use in `grid_map`'s normal-vector filter: take the
+direction over a fixed *distance* rather than a fixed number of cells. We look
+one display step out in each direction and divide by the real metres spanned,
+clamping at the edges. Coarse cells and fine cells then get comparable
+smoothness, and — the point — **no height is altered**. Only the lighting
+changes. Clearance, step and roughness are all read off untouched numbers.
+
+We took the idea, not the library. `grid_map` stores fixed-stride Eigen matrices
+in a circular buffer and is fast precisely because the stride is fixed; variable
+cell size breaks it at the foundation.
+
+### Moving around
+
+Drag with the left button to orbit. Everything else pans or zooms:
+
+    arrow keys / the pad         pan
+    + and -, or the wheel        zoom (the wheel zooms at the cursor)
+    f, or "Fit whole map"        back to a view of everything
+    right-drag, middle-drag,     pan
+      or shift-drag
+    space                        play the sequence
+    , and .                      one frame back / forward
+
+The view is remembered as you step between frames, so you can park the camera on
+one car and watch it across a run. "Fit whole map" resets it.
+
+### Installing it
+
+`requirements.txt` lists what is needed. One trap: `pip install torch` pulls the
+CUDA build, about 2.5 GB, on a machine with no GPU. The file carries the CPU
+wheel index for that reason — installing from it gives you a ~200 MB torch that
+runs the detector fine.
+
 ---
 
-## 15. What this honestly does not do
+## 16. Three ways the picture lied, and what fixed them
+
+All three produced maps that looked completely plausible. Two were in the data
+export, not the renderer, which is why they survived several rounds of looking
+at pictures.
+
+**Tops of things were missing.** Every surface node carries flags: *has a real
+cell*, *drivable*, *terrain known nearby*. The renderer required "terrain known"
+before drawing anything. That is right for the ground surface — drawing terrain
+we never measured would be inventing it — but wrong for the top surface. On a
+roof or the crest of a wall there is no ground return anywhere near, so the test
+failed even though we had real returns right there. 480 nodes, 9.7% of all
+observed nodes, median 1.77 m up: the tall ones. The sides survived because a
+quad is tested on its origin corner only, and a quad running from pavement up to
+roof has its origin at the base. Sides without tops. The top surface now draws a
+node if terrain is known **or** it has a real cell.
+
+**Class was not inherited along with height.** The top surface is hole-filled
+from the nearest real observation within about 0.6 m — that is what stops a
+wall rendering as a comb. But only the *height* was filled; class and
+drivability were hardcoded to "other" and "blocked". So a node on a car roof
+took its height from the car and its class from nowhere: grey roofs on purple
+cars, and the drivability view quietly reading "blocked" across the top of
+everything. Class and drivability are now filled from the same neighbour the
+height came from. Consistent by construction.
+
+**Faces were coloured by the wrong corner.** Each quad is filled with one
+colour, taken from its origin corner. A vertical face spanning ground to roof
+has its origin on the ground, so it took the road's grey while the roof above it
+went purple. Height can be averaged across the four corners; a class cannot, so
+it has to pick one — and a face that spans a step belongs to the taller thing
+standing there. The tallest corner now wins. Faces touching a car coloured as
+car went from 263 to 414.
+
+The pattern in all three: a rule that is correct for one layer applied to
+another where it is wrong, producing output that is confidently incorrect rather
+than obviously broken.
+
+---
+
+## 17. The dataset we would rather have
+
+The camera panel shows one quadrant because that is all KITTI recorded. We went
+looking for a dataset with per-sweep point labels *and* cameras all the way
+round, and there is essentially one: **PandaSet** — 64-beam spinning laser, six
+cameras covering the full circle, per-point semantic labels on every sweep, and
+public files that can be range-read the same way KITTI's are.
+
+Two things stopped us adopting it, and both are worth knowing before anyone
+tries again:
+
+- **KITTI-360, the obvious first guess, does not work.** It has the 360 imagery,
+  but its point labels are painted on an accumulated map of the whole route, not
+  on individual sweeps. Our pipeline needs a labelled single sweep.
+- **PandaSet's sensor origin is unresolved.** Its own calibration says the laser
+  sits at the vehicle origin, which would put it on the roof; but after running
+  the points through the official toolkit's own transform, the road surface
+  comes out at -0.12 m, as if the sensor were at ground level. One of those is
+  wrong and we did not establish which. Every height in this project is measured
+  from the sensor, so that has to be settled first, not guessed.
+
+Parked, not rejected.
+
+---
+
+## 18. What this honestly does not do
 
 - **One sweep at a time.** No combining across frames, no vehicle motion. Each
   frame is an independent map with the sensor at the origin.

@@ -11,7 +11,7 @@ semantic and terrain layers, and the only column worth worrying about is
 "model says drivable, truth says not".
 """
 
-import glob, time
+import glob, sys, time
 import numpy as np
 import grid25 as g, kitti, predict
 
@@ -29,7 +29,7 @@ def main():
     if not frames:
         print('no frames in kitti/ -- run fetch_kitti.py first')
         return
-    model, cfg = predict.load()
+    model, cfg = predict.load(sys.argv[1] if len(sys.argv) > 1 else predict.CKPT)
     print(f'{len(frames)} frames   model params '
           f'{sum(p.numel() for p in model.parameters()):,}\n')
 

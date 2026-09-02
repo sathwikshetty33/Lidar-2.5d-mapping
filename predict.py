@@ -7,10 +7,17 @@ WHAT THIS MODEL ACTUALLY IS
 It is a cluster-wise 3D *detector*, not a semantic segmenter. `ClusterNet`
 takes 256 points from one cluster and emits a single label over
 
-    [Background, Car, Pedestrian, Cyclist]
+    [Background, Car, Pedestrian, Cyclist, Van, Truck]
 
 plus a box. It never labels an individual point, and it has no class at all for
 road, sidewalk, building, vegetation or pole.
+
+Two checkpoints exist. `best_5classes.pt` is the default and is the six-class
+one above; `best.pt` is the earlier four-class model, without Van and Truck.
+Measured over 11 frames the six-class one is the better map: pedestrian and
+cyclist precision 0.328 -> 0.469 at unchanged recall, car a wash (F1 0.758 vs
+0.756), and traversability bit-identical -- 88.78% agreement either way,
+because drivability never reads the class.
 
 The per-point labels grid25 needs come from the three stages around it:
 
@@ -18,8 +25,8 @@ The per-point labels grid25 needs come from the three stages around it:
     cluster_points()  cluster id per non-ground point (geometry, no network)
     ClusterNet        one class per cluster           (the network)
 
-So the network contributes exactly one thing: the car / pedestrian / cyclist
-split among the clusters. Everything static and non-ground -- buildings,
+So the network contributes exactly one thing: the vehicle / pedestrian /
+cyclist split among the clusters. Everything static and non-ground -- buildings,
 vegetation, poles, signs -- has no class to go to and lands in `other`.
 
 WHAT THAT COSTS
@@ -35,7 +42,8 @@ one -- a 4-class detector cannot produce an 8-class map.
 
 Cyclist maps onto `ped` so that it inherits the pedestrian priority override in
 grid25.classify(): a vulnerable road user must not be voted away by a
-road-dominated cell.
+road-dominated cell. Van and truck map onto `car` -- grid25 has no class for
+either, and for traversability a van is a car-shaped obstacle.
 """
 
 from __future__ import annotations
@@ -49,10 +57,13 @@ import grid25 as g
 
 REPO = Path(__file__).resolve().parent / 'trail'
 SRC = REPO / 'pointnet-det' / 'src'
-CKPT = REPO / 'best.pt'
+CKPT = REPO / 'best_5classes.pt'      # six classes; best.pt is the older four
 
-# [Background, Car, Pedestrian, Cyclist] -> grid25
+# [Background, Car, Pedestrian, Cyclist] -> grid25, and the 6-class checkpoint
+# [.. , Van, Truck] on top of it. van and truck fold onto `car`: grid25 has no
+# class for either, and for traversability a van is a car-shaped obstacle.
 DET2GRID = np.array([g.other, g.car, g.ped, g.ped], np.int64)
+DET2GRID6 = np.array([g.other, g.car, g.ped, g.ped, g.car, g.car], np.int64)
 
 # what the DETECTOR itself did with each point, which grid25's 8 classes
 # cannot express. the important split is the last two: a point in a cluster
@@ -61,6 +72,18 @@ DET2GRID = np.array([g.other, g.car, g.ped, g.ped], np.int64)
 PROV = ['ground', 'background', 'car', 'pedestrian', 'cyclist', 'unclustered']
 P_GROUND, P_BG, P_CAR, P_PED, P_CYC, P_NONE = range(6)
 DET2PROV = np.array([P_BG, P_CAR, P_PED, P_CYC], np.int64)
+# van and truck ride as `car` here too, so the browser's palette is unchanged.
+DET2PROV6 = np.array([P_BG, P_CAR, P_PED, P_CYC, P_CAR, P_CAR], np.int64)
+
+
+def _tables(cfg):
+    """pick the label maps matching the checkpoint's class count."""
+    nc = int(getattr(cfg, 'num_classes', 4))
+    if nc == 4:
+        return DET2GRID, DET2PROV
+    if nc == 6:
+        return DET2GRID6, DET2PROV6
+    raise ValueError(f'no label mapping for a {nc}-class checkpoint')
 
 
 def _import():
@@ -176,16 +199,17 @@ def predict(pts4, model, cfg, batch=256, seed=0, with_prov=False):
             conf[i:i+batch] = p.max(1)
 
     hit = cl >= 0
-    lab[fg[hit]] = DET2GRID[pred[cl[hit]]]
-    prov[fg[hit]] = DET2PROV[pred[cl[hit]]]
+    d2g, d2p = _tables(cfg)
+    lab[fg[hit]] = d2g[pred[cl[hit]]]
+    prov[fg[hit]] = d2p[pred[cl[hit]]]
 
-    names = ['Background', 'Car', 'Pedestrian', 'Cyclist']
+    names = ['Background', 'Car', 'Pedestrian', 'Cyclist', 'Van', 'Truck']
     out = dict(
         ground=int(is_ground.sum()),
         clusters=ncl,
         clustered_points=int(hit.sum()),
         unclustered=int((~hit).sum()),
-        counts={names[i]: int((pred == i).sum()) for i in range(4)},
+        counts={names[i]: int((pred == i).sum()) for i in range(len(d2g))},
         provcount={PROV[i]: int((prov == i).sum()) for i in range(6)},
         mean_conf=float(conf.mean()))
     return (lab, out, prov) if with_prov else (lab, out)

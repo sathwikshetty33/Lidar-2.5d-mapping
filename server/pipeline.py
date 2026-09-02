@@ -32,7 +32,7 @@ SURF_MULT = 4          # surface base = 5 cm x this. 4 -> 20/40/80/160 cm.
                        # a car is 0.7 m wide, so at 20 cm it spans 3 nodes and
                        # renders as a flat slab. 10 cm gives 7 and it starts to
                        # look like a car, for 4x the payload.
-CACHE_V = 4            # bump when the frame payload changes shape, so stale
+CACHE_V = 5            # bump when the frame payload changes shape, so stale
                        # cache entries are rebuilt instead of silently served
 
 # the left colour camera that rode along with the laser. it is FORWARD ONLY,

@@ -142,6 +142,35 @@ n, zmin, zmax, zomin, zsum, zsq, ng, gmin, gsum, gsq, hist[nclass]
 
 Store `zsum`/`zsq`, **never mean/variance** — sums merge, means do not.
 
+### Answering "without alignment errors or data loss"
+
+The PS sentence is self-contradictory read literally — it asks for coarser cells
+far away and for no loss of resolution. It is scoped *"during the projection
+from 3D to 2.5D"*, so it means the four binning failures, not resolution:
+points dropped, points double-counted, a cell not holding all the points in its
+own footprint, and two cells claiming the same ground. All four are what the
+two-pass + `blocklevel` design exists to prevent. Provable claims:
+
+- **No point lost or duplicated** — `sum(n) == len(points)` exactly (124,668 on
+  frame 0, across 48,909 cells). One line to check.
+- **No overlapping footprints** — by construction, verified 0 on 7 frames.
+- **Merging is exact** — merging 5 cm cells up three levels gives *bit-for-bit*
+  the same 9,027 cells as binning at 40 cm directly, on every field including
+  all eight class tallies. Only `zsq`/`gsq` differ, at 5.6e-16 relative, from
+  summation order.
+
+Concede two things before a judge finds them:
+
+- **Sub-cell position** is gone. Fine: at 62 m this velodyne's beams land ~43 cm
+  apart vertically, ~18 cm horizontally — the 40 cm cell *is* the sampling gap.
+  We decline to store precision the sensor never had.
+- **Stacking above the lowest obstacle** is gone — that is 2.5D itself, not
+  foveation, and true of any uniform 2.5D grid. Measured frame 0: 32% of cells
+  hold something above ground; 8.6% of all cells compress >0.5 m of vertical
+  extent into `zomin`/`zmax`, 0.75% compress >2 m.
+
+`Notes.md` section 14 is the long-form version.
+
 ---
 
 ## Bugs already found and fixed — do not reintroduce
@@ -182,6 +211,26 @@ Each read as plausible output while being wrong.
    points in a cell must resolve to *pedestrian*. Histogram plus priority
    override for safety-critical classes. This is where an averaging bug becomes a
    safety bug.
+
+7. **`known` gates the ground surface, not the top surface.** Requiring
+   `gdist < gnear` before drawing anything culled 480 observed surface nodes
+   (9.7%, median +1.77 m) — on a roof there is no ground return nearby. Sides
+   survived (a quad is tested on its origin corner, which sits at the base), so
+   the symptom was tops missing while walls stood. Top surface draws on
+   `flag & 5` — real cell **or** terrain known; ground surface stays `flag & 4`.
+
+8. **Hole-filled height must carry its neighbour's class and traversability.**
+   `ztop` is inherited from the nearest real observation within ~0.6 m; `cls`
+   and `trav` were left at `other`/blocked. A car roof then took its height from
+   the car and its class from nowhere — grey tops on purple cars, and the drive
+   view reading *blocked* across the top of everything. Fill all three from the
+   same `distance_transform_edt` indices.
+
+9. **A quad's class comes from its tallest corner, not its origin.** A vertical
+   face spanning pavement to roof took the road's colour. Height can be averaged
+   over four corners; a class cannot, and the taller thing owns the face.
+   Car-coloured faces 263 -> 414. (Both 8 and 9 are in `export_viewer.py` /
+   `web/app.js`, not `grid25.py` — the map data was right, the picture was not.)
 
 ---
 
@@ -240,21 +289,49 @@ this project.** `kitti.load` returns them as a third array. Frame 0 has 88 movin
 points, all of them one **moving motorcyclist** (id 255, which `kitti.py` folds
 onto `ped`). This is what capability 2 should be built against.
 
+`kitti.load(bin)` with no label path returns **everything as `other`** — silent,
+and it makes ground vanish (`ng == 0`, `gmin` all `inf`). Always pass the
+`.label`.
+
+### Datasets with 360 imagery — surveyed, don't redo it
+
+KITTI's camera is 82 degrees, so the photo panel covers one quadrant of the map.
+
+- **KITTI-360 does not fix this.** Its semantics are painted on *accumulated
+  world-frame clouds*, not per sweep. We need a labelled single sweep.
+- **PandaSet is the one that fits** — 64-beam spinning lidar, six cameras
+  covering the full circle, per-point labels on every sweep, public and
+  range-readable. **Blocked on one unresolved question:** its extrinsics say
+  `main_pandar64` is at the vehicle origin (roof), but after the devkit's own
+  `lidar_points_to_ego` the road sits at −0.12 m, as if the sensor were at
+  ground level. Every height here is sensor-relative, so settle that before
+  writing a loader. Parked, not rejected.
+
 ---
 
 ## The model in the loop — measured, 11 frames
 
-Swapping ground truth for `predict.py` over 11 frames (1.3 M points, 442 k cells):
+Swapping ground truth for `predict.py` over 11 frames (1.3 M points, 442 k cells),
+on the six-class `best_5classes.pt`:
 
 | | |
 |---|---|
 | ground | precision **0.756**, recall 0.975 |
-| car | precision 0.939, recall **0.635** |
-| pedestrian + cyclist | precision 0.328, recall 0.425 |
+| car | precision 0.907, recall **0.649** |
+| pedestrian + cyclist | precision 0.469, recall 0.425 |
 | traversability vs ground truth | agrees on **88.8 %** of cells |
 | model drivable, truth NOT | **2.09 %** of cells — the unsafe direction |
-| truth drivable, model NOT | 9.13 % — conservative, harmless |
-| speed | network 428 ms + grid 80 ms = **2.0 Hz** on this CPU |
+| truth drivable, model NOT | 9.12 % — conservative, harmless |
+| speed | network ~230–330 ms + grid 70 ms = **2.5–3.3 Hz** on this CPU |
+
+The older four-class `best.pt` is still in `trail/`. It differs only in the
+semantic layer: car P 0.939 / R 0.635 (F1 0.758 against 0.756 — a wash), and
+pedestrian + cyclist P **0.328** / R 0.425, so the six-class model makes a third
+fewer false VRU calls at the same recall. **Traversability is bit-identical
+between the two** — same 9,270 unsafe cells, same class breakdown — because
+drivability never reads the class and the ground split comes from
+`remove_ground`, which is unchanged. Van and truck fold onto `car` in
+`predict.DET2GRID6`.
 
 **The network is not the problem.** Cluster classification is 97.5 % accurate.
 Three things around it are:
@@ -312,7 +389,9 @@ above ground to reject. Only temporal fusion or the semantic layer catches those
 - **Dynamic flag.** `is_dynamic` cannot come from single-frame segmentation.
   Needs the scan buffer + ego-motion compensation + a moving-object head or
   residual-occupancy check. SemanticKITTI has MOS labels for this.
-- **ROS 2 node wrapper**, `sih_msgs`, dashboard, planner.
+- **ROS 2 node wrapper**, `sih_msgs`, planner. The dashboard exists as `server/`
+  + `web/` (offline, replaying frames); what is missing is the live ROS-side one
+  showing dropped frames and end-to-end latency off the header stamp.
 - **Content-aware refinement** — refine back to high-res on dynamic objects at
   range, so a pedestrian at 40 m doesn't vanish into a 40 cm cell. Differentiator.
 
@@ -384,10 +463,20 @@ contribution. Say so explicitly in the presentation.
 - `check.py` — validates recovered geometry against those truths.
 - `predict.py` + `trail/` — the PointNet detector from MadhankumarAI/trail,
   producing per-point labels. It is a **cluster detector, not a segmenter**:
-  4 classes (Background/Car/Pedestrian/Cyclist), one label per cluster. Ground
-  comes from its geometric `remove_ground`, not from the network, and
-  building / vegetation / pole have no class at all and land in `other`.
+  6 classes (Background/Car/Pedestrian/Cyclist/Van/Truck), one label per
+  cluster, from `trail/best_5classes.pt`. Ground comes from its geometric
+  `remove_ground`, not from the network, and building / vegetation / pole have
+  no class at all and land in `other`. Van and truck fold onto `car`; cyclist
+  onto `ped`, so it inherits the priority override. `predict._tables(cfg)` picks
+  the mapping from the checkpoint's `num_classes`, so the older four-class
+  `best.pt` still loads — `predict.load('trail/best.pt')`, or
+  `evaluate_model.py trail/best.pt`.
   Needs torch (cpu wheel), numba, pyyaml — all in `.venv`.
+  **Only the checkpoint was taken from the upstream update.** That repo also now
+  carries an `integration/` tree (temporal accumulation, dense numba tiers,
+  grid_map emission) written against `grid25.py` — deliberately not adopted;
+  its dense robot-centric grid trades away the sparsity the memory claim rests
+  on.
 - `evaluate_model.py` — scores predicted labels against ground truth at point
   level AND at map level. The map-level column is the one that matters.
 - `export_sequence.py` → `sequence.json` → `player_tpl.html` → `player.html`
@@ -417,6 +506,14 @@ contribution. Say so explicitly in the presentation.
     that fits the scene, which hides the only thing the view exists to show.
   - Obstacles hang from `zg + clear`, never from the ground, or the picture
     asserts the opposite of what the clearance field says.
+  - Shading normals are taken over **one display step**, divided by the metres
+    actually spanned (grid_map's `NormalVectorsFilter` idea: a fixed radius, not
+    a fixed neighbour count). Per-cell normals make every foveated cell its own
+    facet at its own size. **No height is altered** — only the lighting.
+  - Surface base is a job parameter (`detail` = 4/2/1 -> 20/10/5 cm), measured
+    on 00/000000: 48k nodes / 0.39 MB, 190k / 1.52 MB, 756k / 6.05 MB. A car is
+    ~3 nodes across at the 40 cm tier, which is why it read as a slab at the
+    coarse default. The stored map is 48,909 cells at every setting.
 - `server/` + `web/` + `run_server.sh` — **the pipeline as a service.** Nothing
   precomputed: a job names a sequence and a frame selection, and a worker runs
   fetch -> label -> grid -> surface per frame, streaming each one to the browser
@@ -428,18 +525,26 @@ contribution. Say so explicitly in the presentation.
     is the network's blind spot and was previously invisible. `predict.predict`
     supplies it via `with_prov=True`; it rides to the browser as one extra byte
     per surface node.
-  - `POST /api/jobs {seq, mode, start, count, stride, source, seed}` — mode is
-    `sequential` (consecutive sweeps, real motion) or `random` (scattered);
-    source is `model` or `truth`.
+  - `POST /api/jobs {seq, mode, start, count, stride, source, seed, camera,
+    detail}` — mode is `sequential` (consecutive sweeps, real motion) or
+    `random` (scattered); source is `model` or `truth`.
   - `GET /api/jobs/{id}/events` — SSE, one event per finished frame.
   - `GET /api/jobs/{id}/image/{frame}` — the matching camera photo, range-read
-    out of `data_odometry_color.zip` the same way. Forward-facing ~90 degrees
-    against the map's 360, so it is context beside the map, never an overlay.
-    Fetched on its own lower-priority lane so a slow photo never delays a map.
-    First one costs ~50 s (that archive's index is 87,215 entries), then ~5 s
-    each. Frame 00/000000 has the moving motorcyclist visible in it.
+    out of `data_odometry_color.zip` the same way. **Forward-facing 82 degrees
+    against the map's 360** — there is no 360 photo in KITTI, so stop looking
+    for one. Fetched on its own lower-priority lane so a slow photo never delays
+    a map. First one costs ~50 s (that archive's index is 87,215 entries), then
+    ~5 s each. Frame 00/000000 has the moving motorcyclist visible in it.
+  - `pipeline.project()` puts the points **on** the photo (`Tr` then `P2` from
+    `calib.zip`, keep `z > 0.1` and inside the frame — ~15% of a sweep). Real
+    projection, class-coloured; the fastest way to confirm a lump in the map is
+    the car in the picture.
   - The UI state is in the query string, so a run is a shareable link:
     `?seq=00&mode=sequential&count=8&auto=1`.
+  - Left-drag orbits; **everything else pans or zooms** — arrow keys and the pad,
+    `+`/`-` and the wheel (at the cursor), right/middle/shift-drag, `f` to fit,
+    space to play, `,`/`.` to step. The camera is kept across frames so you can
+    park it on one car and watch it move.
   - **Fetching dominates a cold run** — ~40 s a frame, because each one is
     range-read out of the 80 GB remote zip. Three downloads overlap, so 4 cold
     frames take ~50 s rather than ~150 s. Cached frames are instant.
@@ -448,6 +553,12 @@ contribution. Say so explicitly in the presentation.
 - `.venv/` — numpy + scipy + torch(cpu) + numba + fastapi. The PATH python is
   another project's venv and has none of it, so run `.venv/bin/python check.py`,
   not `python3 check.py`.
+- `Notes.md` — the same pipeline in plain English, 18 sections, no jargon: what
+  goes in, what each step does and why, what we got wrong, the compression
+  claim, the "no data loss" reading, and the honest limits. Keep it in step with
+  this file.
+- `requirements.txt` — carries `--extra-index-url .../whl/cpu`. Plain
+  `pip install torch` pulls ~2.5 GB of CUDA wheels onto a machine with no GPU.
 
 Keep the grid builder **outside ROS**. It is a pure function
 `(points Nx3, labels N) -> grid`. Develop it in a script with a two-second edit
